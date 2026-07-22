@@ -1,14 +1,20 @@
 import { Router } from "express";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import {
   listSites,
   getSiteById,
+  createSite,
+  updateSite,
+  deleteSite,
   latestCheck,
   checkHistory,
   eventTimeline,
   latestSnapshot,
   latestScreenshot,
   vitalsHistory,
+  getSetting,
+  setSetting,
 } from "../db.js";
 
 export const apiRouter = Router();
@@ -28,6 +34,58 @@ apiRouter.get("/sites", (req, res) => {
     };
   });
   res.json(sites);
+});
+
+apiRouter.post("/sites", (req, res) => {
+  const { name, url, checkoutUrl } = req.body || {};
+  if (!name || !url) return res.status(400).json({ error: "name and url are required" });
+  try {
+    new URL(url);
+  } catch {
+    return res.status(400).json({ error: "invalid url" });
+  }
+  const site = createSite({ name, url, checkoutUrl, apiKey: crypto.randomBytes(24).toString("hex") });
+  res.status(201).json({ id: site.id });
+});
+
+apiRouter.put("/sites/:id", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  const { name, url, checkoutUrl } = req.body || {};
+  if (!name || !url) return res.status(400).json({ error: "name and url are required" });
+  try {
+    new URL(url);
+  } catch {
+    return res.status(400).json({ error: "invalid url" });
+  }
+  updateSite(site.id, { name, url, checkoutUrl });
+  res.json({ ok: true });
+});
+
+apiRouter.delete("/sites/:id", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  deleteSite(site.id);
+  res.json({ ok: true });
+});
+
+apiRouter.get("/settings", (req, res) => {
+  res.json({
+    telegramBotToken: getSetting("telegram_bot_token", "") ? "••••••••" : "",
+    telegramChatId: getSetting("telegram_chat_id", ""),
+    hasTelegramBotToken: Boolean(getSetting("telegram_bot_token", "")),
+  });
+});
+
+apiRouter.put("/settings", (req, res) => {
+  const { telegramBotToken, telegramChatId } = req.body || {};
+  if (typeof telegramBotToken === "string" && telegramBotToken && telegramBotToken !== "••••••••") {
+    setSetting("telegram_bot_token", telegramBotToken);
+  }
+  if (typeof telegramChatId === "string") {
+    setSetting("telegram_chat_id", telegramChatId);
+  }
+  res.json({ ok: true });
 });
 
 apiRouter.get("/sites/:id", (req, res) => {

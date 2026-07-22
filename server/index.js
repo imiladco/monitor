@@ -6,14 +6,17 @@ import { env } from "./config.js";
 import { seedSitesFromConfig } from "./seed.js";
 import { apiRouter } from "./routes/api.js";
 import { ingestRouter } from "./routes/ingest.js";
+import { authRouter } from "./routes/auth.js";
+import { requireAdmin } from "./auth.js";
 import { runChecks, startScheduler } from "./scheduler.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
-app.use("/api", apiRouter);
-app.use("/api", ingestRouter);
+app.use("/api/auth", authRouter);
+app.use("/api", ingestRouter); // agent snapshots/events authenticate with their own per-site key
+app.use("/api", requireAdmin, apiRouter);
 
 const dashboardDist = path.resolve("dashboard/dist");
 if (fs.existsSync(dashboardDist)) {

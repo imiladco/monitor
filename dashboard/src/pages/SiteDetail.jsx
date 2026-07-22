@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import Sparkline from "../components/Sparkline.jsx";
 import Timeline from "../components/Timeline.jsx";
 
 export default function SiteDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [site, setSite] = useState(null);
   const [checks, setChecks] = useState(null);
   const [events, setEvents] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [saveError, setSaveError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +37,24 @@ export default function SiteDetail() {
   const lastCheck = checks?.[checks.length - 1];
   const agent = site.agent;
 
+  async function saveEdit(e) {
+    e.preventDefault();
+    setSaveError(null);
+    try {
+      await api.updateSite(site.id, editForm);
+      setEditing(false);
+      setSite(await api.site(id));
+    } catch (err) {
+      setSaveError(err.message);
+    }
+  }
+
+  async function remove() {
+    if (!confirm(`سایت «${site.name}» حذف بشه؟ تاریخچه و تایم‌لاینش هم پاک می‌شه.`)) return;
+    await api.deleteSite(site.id);
+    navigate("/");
+  }
+
   return (
     <div>
       <Link to="/" className="text-sm text-gray-500 hover:text-gray-300">
@@ -46,10 +68,64 @@ export default function SiteDetail() {
             {site.url}
           </a>
         </div>
-        <div className="text-left" dir="ltr">
-          <Sparkline points={checks || []} ok={lastCheck?.ok} width={220} height={48} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setEditForm({ name: site.name, url: site.url, checkoutUrl: site.checkoutUrl || "" });
+              setEditing(true);
+            }}
+            className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border"
+          >
+            ویرایش
+          </button>
+          <button onClick={remove} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-bad hover:bg-border">
+            حذف
+          </button>
+          <div dir="ltr">
+            <Sparkline points={checks || []} ok={lastCheck?.ok} width={220} height={48} />
+          </div>
         </div>
       </div>
+
+      {editing && (
+        <form onSubmit={saveEdit} className="mt-4 rounded-xl border border-border bg-panel p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <input
+              required
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
+            />
+            <input
+              required
+              dir="ltr"
+              value={editForm.url}
+              onChange={(e) => setEditForm({ ...editForm, url: e.target.value })}
+              className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
+            />
+            <input
+              dir="ltr"
+              value={editForm.checkoutUrl}
+              onChange={(e) => setEditForm({ ...editForm, checkoutUrl: e.target.value })}
+              placeholder="آدرس چک‌اوت (اختیاری)"
+              className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
+            />
+          </div>
+          {saveError && <p className="mt-2 text-sm text-bad">{saveError}</p>}
+          <div className="mt-3 flex gap-2">
+            <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white">
+              ذخیره
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded-lg bg-panel2 px-4 py-2 text-sm text-gray-300"
+            >
+              انصراف
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="وضعیت" value={lastCheck ? (lastCheck.ok ? "آنلاین" : "آفلاین") : "-"} />
@@ -68,7 +144,7 @@ export default function SiteDetail() {
       {site.screenshot && (
         <div className="mt-6 overflow-hidden rounded-xl border border-border bg-panel">
           <img
-            src={`/api/sites/${site.id}/screenshot?t=${site.screenshot.capturedAt}`}
+            src={api.screenshotUrl(site.id, site.screenshot.capturedAt)}
             alt="آخرین اسکرین‌شات هوم‌پیج"
             className="w-full"
           />

@@ -2,6 +2,7 @@ import "dotenv/config";
 
 export const env = {
   port: Number(process.env.PORT || 4000),
+  adminPassword: process.env.ADMIN_PASSWORD,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
   telegramChatId: process.env.TELEGRAM_CHAT_ID,
   checkIntervalMinutes: Number(process.env.CHECK_INTERVAL_MINUTES || 5),

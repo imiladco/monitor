@@ -5,9 +5,13 @@ import { upsertSite, listSites } from "./db.js";
 
 const SITES_PATH = path.resolve("config/sites.json");
 
+// Only used to bootstrap the very first run. Once sites exist, manage them
+// from the dashboard — this won't touch sites added/edited/removed there.
 export function seedSitesFromConfig() {
+  if (listSites().length > 0) return;
+
   if (!fs.existsSync(SITES_PATH)) {
-    console.warn("[seed] config/sites.json not found, skipping. Copy config/sites.example.json first.");
+    console.warn("[seed] no sites yet and config/sites.json not found — add sites from the dashboard.");
     return;
   }
   const sites = JSON.parse(fs.readFileSync(SITES_PATH, "utf8"));
