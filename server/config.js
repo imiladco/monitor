@@ -18,6 +18,11 @@ export const env = {
   dailySummaryHour: Number(process.env.DAILY_SUMMARY_HOUR ?? 9),
   sslWarnDays: Number(process.env.SSL_WARN_DAYS || 14),
   slowResponseMs: Number(process.env.SLOW_RESPONSE_MS || 3000),
+  // Incident engine: how many consecutive failed checks confirm an outage
+  // (blocks single-blip false positives), and the flapping window/threshold.
+  incidentConfirmChecks: Number(process.env.INCIDENT_CONFIRM_CHECKS || 2),
+  incidentFlapWindowMin: Number(process.env.INCIDENT_FLAP_WINDOW_MIN || 30),
+  incidentFlapThreshold: Number(process.env.INCIDENT_FLAP_THRESHOLD || 3),
   requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 10000),
   dbGrowthWarnPercent: Number(process.env.DB_GROWTH_WARN_PERCENT || 20),
   deepCheckHour: Number(process.env.DEEP_CHECK_HOUR ?? 3),

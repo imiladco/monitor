@@ -5,6 +5,7 @@ import { checkSsl } from "./checks/ssl.js";
 import { checkPort } from "./checks/port.js";
 import { sendTelegram, notifySite } from "./notify/telegram.js";
 import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks, recoverStuckCommands, pruneExpiredSessions } from "./db.js";
+import { processCheckResult } from "./incident/index.js";
 import { runDeepChecks } from "./deepChecks.js";
 import { backupDatabase } from "./backup.js";
 import { runVulnerabilityScan } from "./vuln/index.js";
@@ -28,17 +29,16 @@ async function checkSiteUptime(site) {
     error: result.error,
   });
 
-  // Treat "no prior check" as if it was up, so a site that's already down
-  // the very first time we check it still alerts instead of silently
-  // waiting for a future transition that may never come.
-  const wasUp = prev ? Boolean(prev.ok) : true;
-  if (wasUp !== result.up) {
-    const title = result.up
-      ? `🟢 برگشت آنلاین (${result.responseMs}ms)`
-      : `🔴 از دسترس خارج شد — ${result.error || `HTTP ${result.statusCode}`}`;
-    recordEvent(site.id, { type: "uptime_change", title, severity: result.up ? "info" : "critical" });
-    await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "status");
-  }
+  // The incident engine decides whether this outcome opens/resolves an
+  // incident (after confirmation) and sends the alert — no more alerting on
+  // a single blip.
+  await processCheckResult(site, {
+    type: "uptime",
+    up: result.up,
+    downCause: result.error || `HTTP ${result.statusCode}`,
+    recoveryDetail: `${result.responseMs}ms`,
+    notifyCategory: "status",
+  });
 
   if (result.up && prev) {
     const wasSlow = prev.response_ms > env.slowResponseMs;
@@ -65,12 +65,14 @@ async function checkSiteUptime(site) {
       statusCode: checkoutResult.statusCode,
       error: checkoutResult.error,
     });
-    const checkoutWasUp = checkoutPrev ? Boolean(checkoutPrev.ok) : true;
-    if (checkoutWasUp !== checkoutResult.up) {
-      const title = checkoutResult.up ? "🟢 صفحه‌ی چک‌اوت دوباره سالمه" : "🔴 صفحه‌ی چک‌اوت خرابه";
-      recordEvent(site.id, { type: "checkout_change", title, severity: checkoutResult.up ? "info" : "critical" });
-      await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.checkout_url}`, "status");
-    }
+    await processCheckResult(site, {
+      type: "checkout",
+      up: checkoutResult.up,
+      downTitle: "🔴 صفحه‌ی چک‌اوت خرابه",
+      recoveryTitle: "🟢 صفحه‌ی چک‌اوت دوباره سالمه",
+      notifyCategory: "status",
+      url: site.checkout_url,
+    });
   }
 }
 
@@ -107,14 +109,18 @@ async function checkPortMonitor(portCheck) {
   const result = await checkPort(portCheck.host, portCheck.port);
   recordCheck(portCheck.site_id, { type, ok: result.ok, responseMs: result.responseMs, error: result.error });
 
-  const wasUp = prev ? Boolean(prev.ok) : true;
-  if (wasUp !== result.ok) {
-    const title = result.ok
-      ? `🟢 پورت ${portCheck.label} (${portCheck.host}:${portCheck.port}) دوباره باز شد`
-      : `🔴 پورت ${portCheck.label} (${portCheck.host}:${portCheck.port}) بسته شد — ${result.error}`;
-    recordEvent(portCheck.site_id, { type: "port_change", title, severity: result.ok ? "info" : "critical" });
-    await notifySite(portCheck.site_id, `<b>${portCheck.site_name}</b> ${title}`, "status");
-  }
+  await processCheckResult(
+    { id: portCheck.site_id, name: portCheck.site_name, url: "" },
+    {
+      type,
+      up: result.ok,
+      eventType: "port_change",
+      downTitle: `🔴 پورت ${portCheck.label} (${portCheck.host}:${portCheck.port}) بسته شد — ${result.error}`,
+      recoveryTitle: `🟢 پورت ${portCheck.label} (${portCheck.host}:${portCheck.port}) دوباره باز شد`,
+      notifyCategory: "status",
+      url: "",
+    }
+  );
 }
 
 let checksRunning = false;

@@ -39,6 +39,14 @@ All admin routes below require a valid session cookie unless noted otherwise. `P
 - `GET /sites/:id/vitals` — LCP/CLS/TTFB history
 - `GET /sites/:id/screenshot` — latest homepage screenshot (binary)
 - `GET /sites/:id/sla-report?days=7|30|90` — downloadable CSV: uptime % + incident list
+- `GET /sites/:id/incidents?limit=` — incident history for this site
+
+## Incidents
+
+Confirmed outages (opened only after `INCIDENT_CONFIRM_CHECKS` consecutive failures), deduped per site+type, auto-resolved on recovery, and flagged as flapping when a site cycles repeatedly.
+
+- `GET /incidents?status=open&limit=` — fleet incidents (omit `status` for all recent)
+- `POST /incidents/:id/acknowledge` — mark an open incident acknowledged
 
 ## Maintenance windows
 

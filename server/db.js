@@ -206,6 +206,29 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+-- Incidents: a confirmed availability outage, distinct from a single failed
+-- check. Opened only after N consecutive failures (false-positive control),
+-- deduplicated (one open incident per site+type), auto-resolved on recovery,
+-- and flagged as flapping when a site opens incidents repeatedly.
+CREATE TABLE IF NOT EXISTS incidents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  severity TEXT NOT NULL DEFAULT 'critical',
+  title TEXT NOT NULL,
+  cause TEXT,
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+  acknowledged_at TEXT,
+  resolved_at TEXT,
+  failure_count INTEGER NOT NULL DEFAULT 1,
+  flapping INTEGER NOT NULL DEFAULT 0,
+  notes TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_incidents_site_status ON incidents(site_id, status);
+CREATE INDEX IF NOT EXISTS idx_incidents_open ON incidents(status, type);
 `);
 
 // Lightweight migration: add columns that didn't exist in earlier releases
@@ -534,6 +557,78 @@ export function deleteSession(token) {
 
 export function pruneExpiredSessions() {
   return db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run().changes;
+}
+
+// --- Incidents --------------------------------------------------------------
+
+export function getOpenIncident(siteId, type) {
+  return db
+    .prepare("SELECT * FROM incidents WHERE site_id = ? AND type = ? AND status != 'resolved' ORDER BY id DESC LIMIT 1")
+    .get(siteId, type);
+}
+
+export function openIncident({ siteId, type, severity = "critical", title, cause, startedAt, flapping = false }) {
+  const info = db
+    .prepare(
+      `INSERT INTO incidents (site_id, type, severity, title, cause, started_at, flapping)
+       VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?)`
+    )
+    .run(siteId, type, severity, title, cause ?? null, startedAt ?? null, flapping ? 1 : 0);
+  return db.prepare("SELECT * FROM incidents WHERE id = ?").get(info.lastInsertRowid);
+}
+
+export function incrementIncidentFailure(id) {
+  db.prepare("UPDATE incidents SET failure_count = failure_count + 1 WHERE id = ?").run(id);
+}
+
+export function resolveIncident(id) {
+  return db
+    .prepare("UPDATE incidents SET status = 'resolved', resolved_at = datetime('now') WHERE id = ? AND status != 'resolved'")
+    .run(id).changes;
+}
+
+export function acknowledgeIncident(id) {
+  return db
+    .prepare("UPDATE incidents SET status = 'acknowledged', acknowledged_at = datetime('now') WHERE id = ? AND status = 'open'")
+    .run(id).changes;
+}
+
+// How many incidents opened for this site+type within the recent window —
+// used to detect flapping.
+export function recentIncidentCount(siteId, type, withinMinutes) {
+  return db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM incidents
+       WHERE site_id = ? AND type = ? AND detected_at >= datetime('now', ?)`
+    )
+    .get(siteId, type, `-${Number(withinMinutes)} minutes`).c;
+}
+
+export function listIncidents({ status, limit = 100 } = {}) {
+  const rows = status
+    ? db
+        .prepare(
+          `SELECT i.*, s.name AS site_name, s.url AS site_url FROM incidents i
+           JOIN sites s ON s.id = i.site_id WHERE i.status = ? ORDER BY i.detected_at DESC LIMIT ?`
+        )
+        .all(status, limit)
+    : db
+        .prepare(
+          `SELECT i.*, s.name AS site_name, s.url AS site_url FROM incidents i
+           JOIN sites s ON s.id = i.site_id ORDER BY i.detected_at DESC LIMIT ?`
+        )
+        .all(limit);
+  return rows;
+}
+
+export function siteIncidents(siteId, limit = 50) {
+  return db
+    .prepare("SELECT * FROM incidents WHERE site_id = ? ORDER BY detected_at DESC LIMIT ?")
+    .all(siteId, limit);
+}
+
+export function getIncident(id) {
+  return db.prepare("SELECT * FROM incidents WHERE id = ?").get(id);
 }
 
 // Retention: drop check/event history and screenshot rows older than the

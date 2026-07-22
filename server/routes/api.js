@@ -45,6 +45,10 @@ import {
   createMcpKey,
   listMcpKeys,
   deleteMcpKey,
+  listIncidents,
+  siteIncidents,
+  acknowledgeIncident,
+  getIncident,
 } from "../db.js";
 import { hashMcpKey } from "../mcpAuth.js";
 import { fleetVulnerabilities, runVulnerabilityScan } from "../vuln/index.js";
@@ -323,6 +327,24 @@ apiRouter.post("/settings/telegram-topics/:category/test", async (req, res) => {
 
   const result = await sendTelegram(`${category.icon} پیام تست برای دسته‌ی «${category.label}»`, category.key);
   res.json(result);
+});
+
+// Fleet incidents. ?status=open (default filterless returns all recent).
+apiRouter.get("/incidents", (req, res) => {
+  res.json(listIncidents({ status: req.query.status, limit: Number(req.query.limit) || 100 }));
+});
+
+apiRouter.post("/incidents/:id/acknowledge", (req, res) => {
+  const incident = getIncident(Number(req.params.id));
+  if (!incident) return res.status(404).json({ error: "not found" });
+  acknowledgeIncident(incident.id);
+  res.json({ ok: true });
+});
+
+apiRouter.get("/sites/:id/incidents", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  res.json(siteIncidents(site.id, Number(req.query.limit) || 50));
 });
 
 apiRouter.get("/sites/:id", (req, res) => {
