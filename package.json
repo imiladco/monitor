@@ -1,0 +1,15 @@
+{
+  "name": "wp-site-monitor",
+  "version": "1.0.0",
+  "description": "Uptime, SSL and response-time monitor for WordPress/WooCommerce sites with Telegram alerts",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "check-once": "node src/index.js --once"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3"
+  }
+}

@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Almasara Fast Cart",
+    "url": "https://example.com",
+    "checkoutUrl": "https://example.com/checkout/"
+  },
+  {
+    "name": "Another Shop",
+    "url": "https://example2.com"
+  }
+]
