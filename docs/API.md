@@ -8,11 +8,11 @@ Three separate auth schemes are used, one per audience:
 
 | Audience | Scheme | Header/param |
 |---|---|---|
-| Dashboard (admin) | Shared password | `X-Admin-Password: <ADMIN_PASSWORD>` (or `?pw=` query param for `<img>`/download links) |
+| Dashboard (admin) | Session cookie | `sm_session` httpOnly cookie, minted by `POST /api/auth/login` |
 | WordPress agent | Per-site API key | `X-Api-Key: <site's key>` |
 | Public status page | URL token | Baked into the path: `/api/public/status/:token` |
 
-All admin routes below require `X-Admin-Password` unless noted otherwise. `POST /api/auth/login` is used by the dashboard UI to validate a password (+ 2FA code, if enabled) before storing it client-side — it's not a session/cookie mechanism; the password itself is resent as a header on every subsequent request.
+All admin routes below require a valid session cookie unless noted otherwise. `POST /api/auth/login` verifies the admin password (+ 2FA code, if TOTP is enabled) and, on success, sets an httpOnly `SameSite=Strict` `sm_session` cookie holding an opaque server-side session token — the password itself is never resent. The cookie is sent automatically on same-origin requests, including `<img>`/download links, so no query-param fallback is needed. Set `SECURE_COOKIES=true` once the panel is served over HTTPS to add the `Secure` flag. Sessions last `SESSION_TTL_HOURS` (default 168).
 
 ## Health
 
@@ -20,7 +20,9 @@ All admin routes below require `X-Admin-Password` unless noted otherwise. `POST 
 
 ## Auth
 
-- `POST /auth/login` — `{ password, code? }` → `{ ok: true }` or `401 { error, require2fa? }`
+- `POST /auth/login` — `{ password, code? }` → `{ ok: true }` (+ sets `sm_session` cookie) or `401 { error, require2fa? }`
+- `GET /auth/session` — `{ authenticated: boolean }` — lets the UI check the (httpOnly) cookie on load
+- `POST /auth/logout` — destroys the session and clears the cookie → `{ ok: true }`
 
 ## Sites
 

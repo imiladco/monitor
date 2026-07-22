@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, getPassword } from "../api.js";
+import { api } from "../api.js";
 import { useBranding } from "../useBranding.js";
 
 export default function Login({ onSuccess }) {
@@ -64,8 +64,4 @@ export default function Login({ onSuccess }) {
       </form>
     </div>
   );
-}
-
-export function isLoggedIn() {
-  return Boolean(getPassword());
 }

@@ -11,7 +11,7 @@ import { agentCommandsRouter } from "./routes/agentCommands.js";
 import { mcpRouter } from "./routes/mcp.js";
 import { requireAdmin } from "./auth.js";
 import { runChecks, startScheduler } from "./scheduler.js";
-import { listSites, lastCheckTimestamp, getSetting } from "./db.js";
+import { listSites, lastCheckTimestamp, getSetting, pruneExpiredSessions } from "./db.js";
 import { seedLocalVulnerabilities, runVulnerabilityScan } from "./vuln/index.js";
 import { logger, pruneOldLogs } from "./logger.js";
 
@@ -59,6 +59,7 @@ if (fs.existsSync(dashboardDist)) {
 
 async function main() {
   pruneOldLogs();
+  pruneExpiredSessions();
   seedSitesFromConfig();
   seedLocalVulnerabilities();
 

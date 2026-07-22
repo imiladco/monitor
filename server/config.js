@@ -3,6 +3,11 @@ import "dotenv/config";
 export const env = {
   port: Number(process.env.PORT || 4000),
   adminPassword: process.env.ADMIN_PASSWORD,
+  // Session cookie lifetime and the Secure flag. Secure must stay off while
+  // the panel is served over plain HTTP (the browser drops Secure cookies on
+  // http://), and be flipped on with SECURE_COOKIES=true once TLS is in front.
+  sessionTtlHours: Number(process.env.SESSION_TTL_HOURS || 168),
+  secureCookies: process.env.SECURE_COOKIES === "true",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
   telegramChatId: process.env.TELEGRAM_CHAT_ID,
   checkIntervalMinutes: Number(process.env.CHECK_INTERVAL_MINUTES || 5),

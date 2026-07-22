@@ -5,20 +5,32 @@ import SiteDetail from "./pages/SiteDetail.jsx";
 import SettingsPage from "./pages/Settings.jsx";
 import VulnerabilitiesPage from "./pages/Vulnerabilities.jsx";
 import StatusPage from "./pages/StatusPage.jsx";
-import Login, { isLoggedIn } from "./components/Login.jsx";
+import Login from "./components/Login.jsx";
+import { api } from "./api.js";
 import { useBranding } from "./useBranding.js";
 import { ToastProvider } from "./components/Toast.jsx";
 import { ConfirmProvider } from "./components/ConfirmDialog.jsx";
 
 function AdminApp() {
-  const [loggedIn, setLoggedIn] = useState(isLoggedIn());
+  // null = still checking the session cookie, then true/false.
+  const [loggedIn, setLoggedIn] = useState(null);
   const branding = useBranding();
 
   useEffect(() => {
+    api.session().then(setLoggedIn);
     const onAuthError = () => setLoggedIn(false);
     window.addEventListener("auth-error", onAuthError);
     return () => window.removeEventListener("auth-error", onAuthError);
   }, []);
+
+  async function handleLogout() {
+    await api.logout();
+    setLoggedIn(false);
+  }
+
+  if (loggedIn === null) {
+    return <div className="flex min-h-screen items-center justify-center bg-canvas text-gray-500">...</div>;
+  }
 
   if (!loggedIn) {
     return <Login onSuccess={() => setLoggedIn(true)} />;
@@ -45,6 +57,9 @@ function AdminApp() {
                 <Link to="/settings" className="text-sm text-gray-500 hover:text-gray-300">
                   تنظیمات
                 </Link>
+                <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-300">
+                  خروج
+                </button>
               </div>
             </div>
           </header>

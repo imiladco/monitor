@@ -195,6 +195,16 @@ CREATE TABLE IF NOT EXISTS mcp_api_keys (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_used_at TEXT
 );
+
+-- Admin dashboard sessions. Replaces sending the admin password on every
+-- request: /login (password + TOTP) mints an opaque high-entropy token
+-- stored here and set as an httpOnly cookie; requireAdmin validates it.
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 `);
 
 // Lightweight migration: add columns that didn't exist in earlier releases
@@ -470,6 +480,30 @@ export function recoverStuckCommands(leaseMinutes = 15) {
     )
     .run(`-${leaseMinutes} minutes`);
   return info.changes;
+}
+
+// --- Admin sessions ---------------------------------------------------------
+
+export function createSession(token, ttlHours) {
+  const n = Number(ttlHours);
+  const modifier = `${n >= 0 ? "+" : ""}${n} hours`; // avoid an invalid "+-1 hours"
+  db.prepare("INSERT INTO sessions (token, expires_at) VALUES (?, datetime('now', ?))").run(token, modifier);
+}
+
+export function getValidSession(token) {
+  if (!token) return null;
+  return (
+    db.prepare("SELECT token FROM sessions WHERE token = ? AND expires_at > datetime('now')").get(token) || null
+  );
+}
+
+export function deleteSession(token) {
+  if (!token) return;
+  db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+}
+
+export function pruneExpiredSessions() {
+  return db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run().changes;
 }
 
 export function lastCheckTimestamp() {
