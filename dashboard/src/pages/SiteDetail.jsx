@@ -6,6 +6,7 @@ import ResponseTimeChart from "../components/ResponseTimeChart.jsx";
 import Timeline from "../components/Timeline.jsx";
 import MaintenanceWindows from "../components/MaintenanceWindows.jsx";
 import PortChecks from "../components/PortChecks.jsx";
+import SiteActions from "../components/SiteActions.jsx";
 
 export default function SiteDetail() {
   const { id } = useParams();
@@ -17,6 +18,11 @@ export default function SiteDetail() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [remoteActionsEnabled, setRemoteActionsEnabled] = useState(false);
+
+  useEffect(() => {
+    api.remoteActionsStatus().then((s) => setRemoteActionsEnabled(s.enabled));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +215,7 @@ export default function SiteDetail() {
         </a>
       </div>
 
+      <SiteActions site={site} remoteActionsEnabled={remoteActionsEnabled} />
       <MaintenanceWindows siteId={site.id} />
       <PortChecks siteId={site.id} />
 
