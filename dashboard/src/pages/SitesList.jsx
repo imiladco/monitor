@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import FleetAlerts from "../components/FleetAlerts.jsx";
 import Sparkline from "../components/Sparkline.jsx";
 import SitePanel from "../components/SitePanel.jsx";
+import SiteHoverCard from "../components/SiteHoverCard.jsx";
 import { OPEN_PALETTE_EVENT } from "../components/CommandPalette.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
@@ -226,7 +227,9 @@ function SiteRow({ site, onChanged, onOpen }) {
         <StatusDot up={site.up} paused={site.paused} />
       </td>
       <td className="py-2 pl-3">
-        <div className="font-medium text-content">{site.name}</div>
+        <SiteHoverCard site={site} className="font-medium text-content">
+          {site.name}
+        </SiteHoverCard>
         {site.client && <div className="text-[11px] text-muted">{site.client}</div>}
       </td>
       <td className="py-2 pl-3">
