@@ -2,13 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* backgrounds */
+  --bg: #0a0b0f;
+  --surface: #12141a;
+  --surface-2: #191c24;
+  --surface-hover: #1e222c;
+  --border: #252a36;
+  --border-strong: #2f3543;
+
+  /* text */
+  --text: #e7e9f0;
+  --text-secondary: #a0a6b8;
+  --muted: #6b7186;
+
+  /* signal colors */
+  --accent: #7c6bf5;
+  --accent-hover: #8f80f7;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+  --info: #38bdf8;
+
+  --radius: 6px;
+  --radius-lg: 8px;
+
+  /* strict spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+}
+
 html {
   font-family: "Vazirmatn", system-ui, sans-serif;
 }
 
 body {
-  background-color: #0b0d12;
-  color: #e5e7eb;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* Numbers, metrics, counters, timings — tabular mono reads less amateur. */
+.tnum {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 ::-webkit-scrollbar {
@@ -16,6 +56,9 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2f3a;
+  background: var(--border-strong);
   border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4252;
 }
