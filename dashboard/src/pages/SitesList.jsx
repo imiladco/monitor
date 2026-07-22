@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
-import SiteCard from "../components/SiteCard.jsx";
 import FleetAlerts from "../components/FleetAlerts.jsx";
+import Sparkline from "../components/Sparkline.jsx";
 import { useToast } from "../components/Toast.jsx";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
 
 function AddSiteForm({ onAdded, onCancel }) {
   const toast = useToast();
@@ -112,16 +114,195 @@ function AddSiteForm({ onAdded, onCancel }) {
   );
 }
 
+function StatusDot({ up, paused }) {
+  const color = paused ? "bg-muted" : up === null ? "bg-muted" : up ? "bg-ok" : "bg-bad";
+  const label = paused ? "مکث" : up === null ? "بدون داده" : up ? "آنلاین" : "آفلاین";
+  return <span className={`inline-block h-2.5 w-2.5 rounded-full ${color}`} role="img" aria-label={label} />;
+}
+
+function sslColor(days) {
+  if (days == null) return "text-content-secondary";
+  if (days <= 7) return "text-bad";
+  if (days <= 14) return "text-warn";
+  return "text-content-secondary";
+}
+
+const PILLS = [
+  { key: "all", label: "همه", match: () => true },
+  { key: "online", label: "آنلاین", match: (s) => s.up === true },
+  { key: "offline", label: "آفلاین", match: (s) => s.up === false },
+  { key: "updates", label: "دارای آپدیت", match: (s) => s.updatesCount > 0 },
+  { key: "cve", label: "دارای CVE", match: (s) => s.cveCount > 0 },
+  { key: "ssl", label: "SSL نزدیک انقضا", match: (s) => s.sslDaysLeft != null && s.sslDaysLeft <= 14 },
+];
+
+const SORTS = {
+  name: (a, b) => a.name.localeCompare(b.name, "fa"),
+  status: (a, b) => Number(b.up) - Number(a.up),
+  responseMs: (a, b) => (a.responseMs ?? Infinity) - (b.responseMs ?? Infinity),
+  updatesCount: (a, b) => a.updatesCount - b.updatesCount,
+  cveCount: (a, b) => a.cveCount - b.cveCount,
+  sslDaysLeft: (a, b) => (a.sslDaysLeft ?? Infinity) - (b.sslDaysLeft ?? Infinity),
+};
+
+function RowMenu({ site, onChanged }) {
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="rounded px-1.5 py-1 text-content-secondary hover:bg-surface-hover hover:text-content"
+        aria-label="اکشن‌ها"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="absolute left-0 z-20 mt-1 w-36 overflow-hidden rounded-md border border-border-strong bg-surface-2 py-1 text-xs shadow-lg">
+          <button
+            className="block w-full px-3 py-1.5 text-right text-content hover:bg-surface-hover"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/sites/${site.id}`);
+            }}
+          >
+            باز کردن
+          </button>
+          <button
+            className="block w-full px-3 py-1.5 text-right text-content hover:bg-surface-hover"
+            onClick={async (e) => {
+              e.stopPropagation();
+              setOpen(false);
+              await api.setPaused(site.id, !site.paused);
+              toast.info(site.paused ? "از مکث خارج شد" : "مکث شد");
+              onChanged();
+            }}
+          >
+            {site.paused ? "ادامه‌ی پایش" : "مکث پایش"}
+          </button>
+          <button
+            className="block w-full px-3 py-1.5 text-right text-bad hover:bg-surface-hover"
+            onClick={async (e) => {
+              e.stopPropagation();
+              setOpen(false);
+              const ok = await confirm({ message: `سایت «${site.name}» حذف بشه؟ این کار برگشت‌ناپذیره.` });
+              if (!ok) return;
+              await api.deleteSite(site.id);
+              toast.info("سایت حذف شد");
+              onChanged();
+            }}
+          >
+            حذف
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SiteRow({ site, onChanged }) {
+  const navigate = useNavigate();
+  return (
+    <tr
+      onClick={() => navigate(`/sites/${site.id}`)}
+      className="cursor-pointer border-b border-border hover:bg-surface-hover"
+    >
+      <td className="w-6 pr-0 pl-0 text-center">
+        <StatusDot up={site.up} paused={site.paused} />
+      </td>
+      <td className="py-2 pl-3">
+        <div className="font-medium text-content">{site.name}</div>
+        {site.client && <div className="text-[11px] text-muted">{site.client}</div>}
+      </td>
+      <td className="py-2 pl-3">
+        <span className="tnum text-xs text-content-secondary" dir="ltr">
+          {site.url.replace(/^https?:\/\//, "")}
+        </span>
+      </td>
+      <td className="py-2 pl-3">
+        {site.recentChecks?.length > 1 ? (
+          <Sparkline checks={site.recentChecks} />
+        ) : (
+          <span className="text-xs text-muted">—</span>
+        )}
+      </td>
+      <td className="tnum py-2 pl-3 text-left text-xs text-content-secondary">
+        {site.responseMs != null ? `${site.responseMs}ms` : "—"}
+      </td>
+      <td className="py-2 pl-3 text-center">
+        {site.updatesCount > 0 ? (
+          <span className="tnum inline-flex items-center gap-1 text-xs text-info" title="آپدیت‌های موجود">
+            ⟳ {site.updatesCount}
+          </span>
+        ) : null}
+      </td>
+      <td className="py-2 pl-3 text-center">
+        {site.cveCount > 0 ? (
+          <span className="tnum inline-flex items-center gap-1 text-xs text-bad" title="آسیب‌پذیری فعال">
+            ⚠ {site.cveCount}
+          </span>
+        ) : null}
+      </td>
+      <td className={`tnum py-2 pl-3 text-left text-xs ${sslColor(site.sslDaysLeft)}`}>
+        {site.sslDaysLeft != null ? `${site.sslDaysLeft}d` : "—"}
+      </td>
+      <td className="w-8 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+        <RowMenu site={site} onChanged={onChanged} />
+      </td>
+    </tr>
+  );
+}
+
+function SortHeader({ label, sortKey, sort, dir, onSort, align = "right", className = "" }) {
+  const active = sort === sortKey;
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      className={`cursor-pointer select-none whitespace-nowrap px-0 pl-3 py-2 font-medium text-muted hover:text-content-secondary text-${align} ${className}`}
+    >
+      {label}
+      {active && <span className="mr-0.5 text-accent">{dir === "asc" ? "↑" : "↓"}</span>}
+    </th>
+  );
+}
+
 export default function SitesList() {
   const [sites, setSites] = useState(null);
   const [error, setError] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [clientFilter, setClientFilter] = useState("all");
+  const [pill, setPill] = useState("all");
+  const [query, setQuery] = useState("");
+  const [params, setParams] = useSearchParams();
+
+  const sort = params.get("sort") || "status";
+  const dir = params.get("dir") || "asc";
+
+  function onSort(key) {
+    const nextDir = sort === key && dir === "asc" ? "desc" : "asc";
+    const next = new URLSearchParams(params);
+    next.set("sort", key);
+    next.set("dir", nextDir);
+    setParams(next, { replace: true });
+  }
 
   async function load() {
     try {
-      const data = await api.sites();
-      setSites(data);
+      setSites(await api.sites());
     } catch (err) {
       setError(err.message);
     }
@@ -133,50 +314,55 @@ export default function SitesList() {
     return () => clearInterval(interval);
   }, []);
 
-  if (error) return <div className="text-bad">خطا در دریافت داده: {error}</div>;
-  if (!sites) return <div className="text-gray-500">در حال بارگذاری…</div>;
+  const clients = useMemo(
+    () => (sites ? [...new Set(sites.map((s) => s.client).filter(Boolean))].sort() : []),
+    [sites]
+  );
 
-  const upCount = sites.filter((s) => s.up).length;
-  const clients = [...new Set(sites.map((s) => s.client).filter(Boolean))].sort();
-  const visibleSites = clientFilter === "all" ? sites : sites.filter((s) => s.client === clientFilter);
-  const groups =
-    clientFilter !== "all"
-      ? [[clientFilter, visibleSites]]
-      : Object.entries(
-          visibleSites.reduce((acc, s) => {
-            const key = s.client || "بدون گروه";
-            (acc[key] ||= []).push(s);
-            return acc;
-          }, {})
-        ).sort(([a], [b]) => (a === "بدون گروه" ? 1 : b === "بدون گروه" ? -1 : a.localeCompare(b)));
+  const visible = useMemo(() => {
+    if (!sites) return [];
+    const pillFn = (PILLS.find((p) => p.key === pill) || PILLS[0]).match;
+    const q = query.trim().toLowerCase();
+    let rows = sites.filter((s) => {
+      if (clientFilter !== "all" && s.client !== clientFilter) return false;
+      if (!pillFn(s)) return false;
+      if (q && !(`${s.name} ${s.url} ${s.client || ""}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    const cmp = SORTS[sort] || SORTS.status;
+    rows = [...rows].sort(cmp);
+    if (dir === "desc") rows.reverse();
+    return rows;
+  }, [sites, pill, query, clientFilter, sort, dir]);
+
+  if (error) return <div className="text-bad">خطا در دریافت داده: {error}</div>;
+
+  const upCount = sites ? sites.filter((s) => s.up).length : 0;
+  const totalUpdates = sites ? sites.reduce((n, s) => n + s.updatesCount, 0) : 0;
+  const totalCve = sites ? sites.reduce((n, s) => n + s.cveCount, 0) : 0;
 
   return (
     <div>
       <FleetAlerts />
-      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-lg font-semibold text-gray-100">سایت‌ها</h2>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">
-            {upCount} از {sites.length} آنلاین
-          </span>
-          {clients.length > 0 && (
-            <select
-              value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
-              className="rounded-lg border border-border bg-panel2 px-2 py-1 text-sm text-gray-300 outline-none"
-            >
-              <option value="all">همه‌ی مشتری‌ها</option>
-              {clients.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          )}
+
+      {/* slim summary strip */}
+      <div className="mb-4 flex items-center gap-5 rounded-lg border border-border bg-surface px-4 py-2 text-xs text-content-secondary">
+        <span>
+          <span className="tnum text-content">{upCount}</span> از{" "}
+          <span className="tnum text-content">{sites?.length ?? "—"}</span> آنلاین
+        </span>
+        <span className="text-border-strong">|</span>
+        <span>
+          آپدیت: <span className="tnum text-info">{totalUpdates}</span>
+        </span>
+        <span>
+          CVE: <span className="tnum text-bad">{totalCve}</span>
+        </span>
+        <div className="mr-auto">
           {!showAdd && (
             <button
               onClick={() => setShowAdd(true)}
-              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white"
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover"
             >
               + سایت جدید
             </button>
@@ -194,26 +380,94 @@ export default function SitesList() {
         />
       )}
 
-      {sites.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-panel p-8 text-center text-gray-500">
+      {/* filter bar */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="جستجوی سایت…"
+            className="w-56 rounded-md border border-border bg-surface-2 py-1.5 pr-3 pl-12 text-xs text-content outline-none focus:border-accent"
+          />
+          <span className="tnum pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 rounded border border-border px-1 text-[10px] text-muted">
+            ⌘K
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          {PILLS.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => setPill(p.key)}
+              className={`rounded-md border px-2.5 py-1 text-xs ${
+                pill === p.key
+                  ? "border-accent bg-accent/15 text-content"
+                  : "border-border bg-surface-2 text-content-secondary hover:border-border-strong"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {clients.length > 0 && (
+          <select
+            value={clientFilter}
+            onChange={(e) => setClientFilter(e.target.value)}
+            className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-content-secondary outline-none"
+          >
+            <option value="all">همه‌ی مشتری‌ها</option>
+            {clients.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
+        <span className="mr-auto text-xs text-muted">
+          <span className="tnum text-content-secondary">{visible.length}</span> سایت
+        </span>
+      </div>
+
+      {sites == null ? (
+        <div className="overflow-hidden rounded-lg border border-border">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-0">
+              <div className="h-2.5 w-2.5 rounded-full bg-surface-2" />
+              <div className="h-3 w-32 animate-pulse rounded bg-surface-2" />
+              <div className="h-3 w-40 animate-pulse rounded bg-surface-2" />
+              <div className="mr-auto h-3 w-16 animate-pulse rounded bg-surface-2" />
+            </div>
+          ))}
+        </div>
+      ) : sites.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border bg-surface p-10 text-center text-sm text-content-secondary">
+          <div className="mb-2 text-2xl">🛰️</div>
           هنوز سایتی اضافه نکردی — از دکمه‌ی «+ سایت جدید» شروع کن.
         </div>
       ) : (
-        <div className="space-y-8">
-          {groups.map(([groupName, groupSites]) => (
-            <div key={groupName}>
-              {clients.length > 0 && (
-                <h3 className="mb-3 text-sm font-medium text-gray-400">
-                  {groupName} <span className="text-gray-600">({groupSites.length})</span>
-                </h3>
-              )}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {groupSites.map((site) => (
-                  <SiteCard key={site.id} site={site} />
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[720px] border-collapse text-right text-sm">
+            <thead>
+              <tr className="border-b border-border-strong bg-surface text-xs">
+                <th className="w-6" />
+                <SortHeader label="سایت" sortKey="name" sort={sort} dir={dir} onSort={onSort} />
+                <th className="px-0 pl-3 py-2 font-medium text-muted">URL</th>
+                <th className="px-0 pl-3 py-2 font-medium text-muted">۲۴ ساعت</th>
+                <SortHeader label="پاسخ" sortKey="responseMs" sort={sort} dir={dir} onSort={onSort} align="left" />
+                <SortHeader label="آپدیت" sortKey="updatesCount" sort={sort} dir={dir} onSort={onSort} align="center" />
+                <SortHeader label="CVE" sortKey="cveCount" sort={sort} dir={dir} onSort={onSort} align="center" />
+                <SortHeader label="SSL" sortKey="sslDaysLeft" sort={sort} dir={dir} onSort={onSort} align="left" />
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((site) => (
+                <SiteRow key={site.id} site={site} onChanged={load} />
+              ))}
+            </tbody>
+          </table>
+          {visible.length === 0 && (
+            <div className="px-4 py-8 text-center text-xs text-muted">هیچ سایتی با این فیلترها پیدا نشد.</div>
+          )}
         </div>
       )}
     </div>
