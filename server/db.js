@@ -230,6 +230,25 @@ CREATE TABLE IF NOT EXISTS incidents (
 CREATE INDEX IF NOT EXISTS idx_incidents_site_status ON incidents(site_id, status);
 CREATE INDEX IF NOT EXISTS idx_incidents_open ON incidents(status, type);
 
+-- Persistent job queue. Durable across restarts (recovered by lease expiry),
+-- with priority, retry+exponential backoff, and a dead-letter state ('failed'
+-- after max_attempts). Workers claim due jobs under a per-type concurrency cap.
+CREATE TABLE IF NOT EXISTS jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  payload TEXT,
+  priority INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  run_after TEXT NOT NULL DEFAULT (datetime('now')),
+  lease_until TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_claim ON jobs(status, run_after, priority);
+
 -- Daily uptime rollups. Kept indefinitely so long-term history survives the
 -- raw-check retention window (raw checks are pruned after DATA_RETENTION_DAYS).
 CREATE TABLE IF NOT EXISTS uptime_daily (
@@ -698,6 +717,90 @@ export function dbFileSizeBytes() {
 
 export function vacuum() {
   db.exec("VACUUM");
+}
+
+// --- Persistent job queue ---------------------------------------------------
+
+export function enqueueJob({ type, payload = null, priority = 0, maxAttempts = 3, runAfterSeconds = 0 }) {
+  const info = db
+    .prepare(
+      `INSERT INTO jobs (type, payload, priority, max_attempts, run_after)
+       VALUES (?, ?, ?, ?, datetime('now', ?))`
+    )
+    .run(type, payload ? JSON.stringify(payload) : null, priority, maxAttempts, `+${Number(runAfterSeconds)} seconds`);
+  return info.lastInsertRowid;
+}
+
+// Atomically pick the highest-priority due job of one of the given types and
+// mark it running with a lease. Returns the job (attempts already bumped) or
+// null. The whole read-then-claim is a transaction so two workers can't grab
+// the same job.
+export function claimJob(types, leaseSeconds) {
+  const placeholders = types.map(() => "?").join(",");
+  return db.transaction(() => {
+    const row = db
+      .prepare(
+        `SELECT * FROM jobs WHERE status = 'pending' AND run_after <= datetime('now')
+           AND type IN (${placeholders})
+         ORDER BY priority DESC, id ASC LIMIT 1`
+      )
+      .get(...types);
+    if (!row) return null;
+    db.prepare(
+      `UPDATE jobs SET status = 'running', attempts = attempts + 1,
+         lease_until = datetime('now', ?), updated_at = datetime('now') WHERE id = ?`
+    ).run(`+${Number(leaseSeconds)} seconds`, row.id);
+    return {
+      ...row,
+      status: "running",
+      attempts: row.attempts + 1,
+      payload: row.payload ? JSON.parse(row.payload) : null,
+    };
+  })();
+}
+
+export function completeJob(id) {
+  db.prepare("UPDATE jobs SET status = 'done', updated_at = datetime('now') WHERE id = ?").run(id);
+}
+
+// Retry with backoff, or dead-letter ('failed') once attempts hit the cap.
+// Returns "retry" | "dead-letter" | "gone".
+export function failJob(id, error, backoffSeconds) {
+  const job = db.prepare("SELECT attempts, max_attempts FROM jobs WHERE id = ?").get(id);
+  if (!job) return "gone";
+  const msg = String(error).slice(0, 500);
+  if (job.attempts >= job.max_attempts) {
+    db.prepare("UPDATE jobs SET status = 'failed', last_error = ?, updated_at = datetime('now') WHERE id = ?").run(msg, id);
+    return "dead-letter";
+  }
+  db.prepare(
+    "UPDATE jobs SET status = 'pending', run_after = datetime('now', ?), last_error = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(`+${Number(backoffSeconds)} seconds`, msg, id);
+  return "retry";
+}
+
+// Requeue jobs whose worker died mid-run (lease expired). Called on startup and
+// periodically.
+export function recoverStuckJobs() {
+  return db
+    .prepare(
+      `UPDATE jobs SET status = 'pending', lease_until = NULL, updated_at = datetime('now')
+       WHERE status = 'running' AND lease_until IS NOT NULL AND lease_until <= datetime('now')`
+    )
+    .run().changes;
+}
+
+export function jobStats() {
+  return db
+    .prepare("SELECT status, COUNT(*) AS c FROM jobs GROUP BY status")
+    .all()
+    .reduce((acc, r) => ((acc[r.status] = r.c), acc), {});
+}
+
+export function pruneFinishedJobs(days = 7) {
+  return db
+    .prepare("DELETE FROM jobs WHERE status IN ('done', 'failed') AND updated_at < datetime('now', ?)")
+    .run(`-${Number(days)} days`).changes;
 }
 
 // Retention: drop check/event history and screenshot rows older than the
