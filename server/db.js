@@ -506,6 +506,26 @@ export function pruneExpiredSessions() {
   return db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run().changes;
 }
 
+// Retention: drop check/event history and screenshot rows older than the
+// window so the SQLite file doesn't grow without bound. Returns counts plus
+// the on-disk paths of the pruned screenshots, so the caller can unlink them.
+export function pruneOldData(retentionDays = 180) {
+  const cutoff = `-${Number(retentionDays)} days`;
+  const oldShots = db
+    .prepare("SELECT id, path FROM screenshots WHERE captured_at < datetime('now', ?)")
+    .all(cutoff);
+  const delShot = db.prepare("DELETE FROM screenshots WHERE id = ?");
+
+  const result = db.transaction(() => {
+    const checks = db.prepare("DELETE FROM checks WHERE checked_at < datetime('now', ?)").run(cutoff).changes;
+    const events = db.prepare("DELETE FROM events WHERE occurred_at < datetime('now', ?)").run(cutoff).changes;
+    for (const s of oldShots) delShot.run(s.id);
+    return { checks, events, screenshots: oldShots.length };
+  })();
+
+  return { ...result, screenshotPaths: oldShots.map((s) => s.path) };
+}
+
 export function lastCheckTimestamp() {
   const row = db.prepare("SELECT MAX(checked_at) AS t FROM checks").get();
   return row?.t ?? null;
