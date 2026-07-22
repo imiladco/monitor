@@ -1,6 +1,35 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 
+const ERROR_HINTS = [
+  {
+    match: /not enough rights/i,
+    hint: 'ربات هنوز اجازه‌ی «Manage Topics» رو تو گروه نداره — برو مدیران گروه ← اسم ربات ← دسترسی «Manage Topics» رو روشن کن.',
+  },
+  {
+    match: /chat not found/i,
+    hint: "این Chat ID پیدا نشد — مطمئن شو ربات هنوز عضو همون گروهه و آیدی درست کپی شده.",
+  },
+  {
+    match: /bot is not a member/i,
+    hint: "ربات دیگه عضو این گروه نیست — دوباره اضافه‌اش کن.",
+  },
+  {
+    match: /unauthorized/i,
+    hint: "توکن ربات نامعتبره — از صفحه‌ی بالا Bot Token رو دوباره چک کن.",
+  },
+  {
+    match: /have no rights to send a message|not enough rights to send/i,
+    hint: "ربات اجازه‌ی ارسال پیام تو این گروه/تاپیک رو نداره.",
+  },
+];
+
+function explainTelegramError(message) {
+  if (!message) return null;
+  const hint = ERROR_HINTS.find((h) => h.match.test(message))?.hint;
+  return hint ? `${hint} (پیام اصلی: ${message})` : message;
+}
+
 export default function TelegramTopics({ groupId, onGroupIdChange, onGroupIdSaved }) {
   const [discovering, setDiscovering] = useState(false);
   const [discoverResult, setDiscoverResult] = useState(null);
@@ -88,7 +117,7 @@ export default function TelegramTopics({ groupId, onGroupIdChange, onGroupIdSave
       </div>
       {discoverResult && (
         <p className={`mt-2 text-sm ${discoverResult.ok ? "text-good" : "text-bad"}`}>
-          {discoverResult.ok ? `✅ پیدا شد: ${discoverResult.title}` : `❌ ${discoverResult.error}`}
+          {discoverResult.ok ? `✅ پیدا شد: ${discoverResult.title}` : `❌ ${explainTelegramError(discoverResult.error)}`}
         </p>
       )}
 
@@ -102,12 +131,16 @@ export default function TelegramTopics({ groupId, onGroupIdChange, onGroupIdSave
             {settingUp ? "در حال ساخت…" : "ساخت خودکار همه‌ی تاپیک‌ها"}
           </button>
           {setupResult && (
-            <p className="mt-2 text-xs text-gray-500">
-              {setupResult.filter((r) => r.ok && !r.skipped).length} تاپیک جدید ساخته شد،{" "}
-              {setupResult.filter((r) => r.skipped).length} از قبل بود
-              {setupResult.some((r) => !r.ok) &&
-                `، ${setupResult.filter((r) => !r.ok).length} ناموفق (${setupResult.find((r) => !r.ok)?.error})`}
-            </p>
+            <div className="mt-2 text-xs text-gray-500">
+              <p>
+                {setupResult.filter((r) => r.ok && !r.skipped).length} تاپیک جدید ساخته شد،{" "}
+                {setupResult.filter((r) => r.skipped).length} از قبل بود
+                {setupResult.some((r) => !r.ok) && `، ${setupResult.filter((r) => !r.ok).length} ناموفق`}
+              </p>
+              {setupResult.some((r) => !r.ok) && (
+                <p className="mt-1 text-bad">{explainTelegramError(setupResult.find((r) => !r.ok)?.error)}</p>
+              )}
+            </div>
           )}
 
           {topics && (
@@ -133,7 +166,7 @@ export default function TelegramTopics({ groupId, onGroupIdChange, onGroupIdSave
                   </button>
                   {testResults[t.key] && testResults[t.key] !== "loading" && (
                     <span className={`text-xs ${testResults[t.key].ok ? "text-good" : "text-bad"}`}>
-                      {testResults[t.key].ok ? "✓ ارسال شد" : `✗ ${testResults[t.key].error}`}
+                      {testResults[t.key].ok ? "✓ ارسال شد" : `✗ ${explainTelegramError(testResults[t.key].error)}`}
                     </span>
                   )}
                 </div>
