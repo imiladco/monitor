@@ -6,6 +6,7 @@ import { checkPort } from "./checks/port.js";
 import { sendTelegram, notifySite } from "./notify/telegram.js";
 import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks, recoverStuckCommands, pruneExpiredSessions } from "./db.js";
 import { processCheckResult } from "./incident/index.js";
+import { runPool } from "./pool.js";
 import { runDeepChecks } from "./deepChecks.js";
 import { backupDatabase } from "./backup.js";
 import { runVulnerabilityScan } from "./vuln/index.js";
@@ -136,22 +137,21 @@ export async function runChecks() {
   checksRunning = true;
   try {
     const sites = listSites().filter((s) => !s.paused);
-    for (const site of sites) {
-      try {
-        await checkSiteUptime(site);
-        await checkSiteSsl(site);
-      } catch (err) {
-        logger.error("checks: site check failed", { site: site.name, error: err.message });
-      }
-    }
+    // Bounded concurrency: many sites (or a few slow/timing-out ones) no longer
+    // serialize the whole sweep. runPool swallows per-item errors.
+    const siteResults = await runPool(sites, env.uptimeConcurrency, async (site) => {
+      await checkSiteUptime(site);
+      await checkSiteSsl(site);
+    });
+    siteResults.forEach((r, i) => {
+      if (r?.error) logger.error("checks: site check failed", { site: sites[i].name, error: r.error.message });
+    });
 
-    for (const portCheck of listAllPortChecks().filter((p) => !p.site_paused)) {
-      try {
-        await checkPortMonitor(portCheck);
-      } catch (err) {
-        logger.error("checks: port check failed", { label: portCheck.label, error: err.message });
-      }
-    }
+    const portChecks = listAllPortChecks().filter((p) => !p.site_paused);
+    const portResults = await runPool(portChecks, env.portConcurrency, (portCheck) => checkPortMonitor(portCheck));
+    portResults.forEach((r, i) => {
+      if (r?.error) logger.error("checks: port check failed", { label: portChecks[i].label, error: r.error.message });
+    });
   } finally {
     checksRunning = false;
   }

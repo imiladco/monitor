@@ -20,6 +20,10 @@ export const env = {
   slowResponseMs: Number(process.env.SLOW_RESPONSE_MS || 3000),
   // Incident engine: how many consecutive failed checks confirm an outage
   // (blocks single-blip false positives), and the flapping window/threshold.
+  // How many site/port checks run concurrently per sweep (was fully
+  // sequential). Keeps big fleets from taking minutes per cycle.
+  uptimeConcurrency: Number(process.env.UPTIME_CONCURRENCY || 8),
+  portConcurrency: Number(process.env.PORT_CONCURRENCY || 10),
   incidentConfirmChecks: Number(process.env.INCIDENT_CONFIRM_CHECKS || 2),
   incidentFlapWindowMin: Number(process.env.INCIDENT_FLAP_WINDOW_MIN || 30),
   incidentFlapThreshold: Number(process.env.INCIDENT_FLAP_THRESHOLD || 3),
