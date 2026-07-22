@@ -7,6 +7,7 @@ import path from "node:path";
 process.env.DB_PATH = path.join(os.tmpdir(), `site-monitor-test-${process.pid}-${Date.now()}.db`);
 
 const {
+  db,
   createSite,
   updateSite,
   deleteSite,
@@ -32,6 +33,7 @@ const {
   listCommands,
   claimPendingCommands,
   completeCommand,
+  recoverStuckCommands,
   listClients,
 } = await import("../db.js");
 
@@ -163,11 +165,44 @@ test("commands: queue, claim (moves pending->running, idempotent), and complete"
   // a second poll shouldn't re-claim the same (now-running) command
   assert.equal(claimPendingCommands(site.id).length, 0);
 
-  completeCommand(cmd.id, "done", "updated to 9.0");
+  const changed = completeCommand(cmd.id, site.id, "done", "updated to 9.0");
+  assert.equal(changed, 1);
   const history = listCommands(site.id);
   assert.equal(history[0].status, "done");
   assert.equal(history[0].result, "updated to 9.0");
   assert.ok(history[0].completed_at);
+});
+
+test("completeCommand is scoped to the owning site (no cross-site completion)", () => {
+  const owner = createSite({ name: "Owner", url: "https://owner.example.com", apiKey: "key-owner" });
+  const attacker = createSite({ name: "Attacker", url: "https://attacker.example.com", apiKey: "key-attacker" });
+  const cmd = createCommand({ siteId: owner.id, type: "update_plugin", params: null });
+  claimPendingCommands(owner.id);
+
+  // Another site's agent guessing the id can't complete it.
+  assert.equal(completeCommand(cmd.id, attacker.id, "done", "hijacked"), 0);
+  assert.equal(listCommands(owner.id)[0].status, "running");
+
+  // The real owner can.
+  assert.equal(completeCommand(cmd.id, owner.id, "done", "ok"), 1);
+
+  // ...but only while it's running — a second completion is a no-op.
+  assert.equal(completeCommand(cmd.id, owner.id, "done", "again"), 0);
+});
+
+test("recoverStuckCommands requeues only leases older than the window", () => {
+  const site = createSite({ name: "Stuck Site", url: "https://stuck.example.com", apiKey: "key-stuck" });
+  const fresh = createCommand({ siteId: site.id, type: "noop", params: null });
+  const stale = createCommand({ siteId: site.id, type: "noop", params: null });
+  claimPendingCommands(site.id); // both -> running, claimed_at = now
+
+  // Backdate one claim well past the lease.
+  db.prepare("UPDATE commands SET claimed_at = datetime('now', '-30 minutes') WHERE id = ?").run(stale.id);
+
+  const recovered = recoverStuckCommands(15);
+  assert.equal(recovered, 1);
+  assert.equal(listCommands(site.id).find((c) => c.id === stale.id).status, "pending");
+  assert.equal(listCommands(site.id).find((c) => c.id === fresh.id).status, "running");
 });
 
 test("listClients returns distinct, sorted, non-empty client names", () => {

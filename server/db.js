@@ -7,6 +7,9 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 export const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
+// Enforce ON DELETE CASCADE (off by default in SQLite) — without this,
+// deleting a site leaves orphan checks/events/snapshots/etc. behind.
+db.pragma("foreign_keys = ON");
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS sites (
@@ -208,6 +211,11 @@ for (const [column, definition] of Object.entries(siteColumnsToAdd)) {
   if (!existingSiteColumns.has(column)) {
     db.exec(`ALTER TABLE sites ADD COLUMN ${column} ${definition}`);
   }
+}
+
+const existingCommandColumns = new Set(db.prepare("PRAGMA table_info(commands)").all().map((c) => c.name));
+if (!existingCommandColumns.has("claimed_at")) {
+  db.exec("ALTER TABLE commands ADD COLUMN claimed_at TEXT");
 }
 
 export function upsertSite({ name, url, checkoutUrl, apiKey }) {
@@ -434,17 +442,34 @@ export function listCommands(siteId, limit = 50) {
 // so a slow/duplicate agent poll doesn't pick the same command up twice.
 export function claimPendingCommands(siteId) {
   const pending = db.prepare("SELECT * FROM commands WHERE site_id = ? AND status = 'pending'").all(siteId);
-  const markRunning = db.prepare("UPDATE commands SET status = 'running' WHERE id = ?");
+  const markRunning = db.prepare("UPDATE commands SET status = 'running', claimed_at = datetime('now') WHERE id = ?");
   for (const c of pending) markRunning.run(c.id);
   return pending.map((c) => ({ ...c, status: "running", params: c.params ? JSON.parse(c.params) : null }));
 }
 
-export function completeCommand(id, status, result) {
-  db.prepare("UPDATE commands SET status = ?, result = ?, completed_at = datetime('now') WHERE id = ?").run(
-    status,
-    result ?? null,
-    id
-  );
+// Scoped to the calling agent's own site and to a currently-running command,
+// so one site's agent can't complete (or guess the id of) another site's
+// command. Returns the number of rows changed (0 = not found / not theirs).
+export function completeCommand(id, siteId, status, result) {
+  const info = db
+    .prepare(
+      "UPDATE commands SET status = ?, result = ?, completed_at = datetime('now') WHERE id = ? AND site_id = ? AND status = 'running'"
+    )
+    .run(status, result ?? null, id, siteId);
+  return info.changes;
+}
+
+// Requeues commands stuck in 'running' past the lease (agent crashed or its
+// result never arrived), so they don't hang forever.
+export function recoverStuckCommands(leaseMinutes = 15) {
+  const info = db
+    .prepare(
+      `UPDATE commands SET status = 'pending', claimed_at = NULL
+       WHERE status = 'running' AND claimed_at IS NOT NULL
+         AND claimed_at <= datetime('now', ?)`
+    )
+    .run(`-${leaseMinutes} minutes`);
+  return info.changes;
 }
 
 export function lastCheckTimestamp() {

@@ -4,7 +4,7 @@ import { checkUptime } from "./checks/uptime.js";
 import { checkSsl } from "./checks/ssl.js";
 import { checkPort } from "./checks/port.js";
 import { sendTelegram, notifySite } from "./notify/telegram.js";
-import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks } from "./db.js";
+import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks, recoverStuckCommands } from "./db.js";
 import { runDeepChecks } from "./deepChecks.js";
 import { backupDatabase } from "./backup.js";
 import { runVulnerabilityScan } from "./vuln/index.js";
@@ -116,23 +116,36 @@ async function checkPortMonitor(portCheck) {
   }
 }
 
-export async function runChecks() {
-  const sites = listSites().filter((s) => !s.paused);
-  for (const site of sites) {
-    try {
-      await checkSiteUptime(site);
-      await checkSiteSsl(site);
-    } catch (err) {
-      logger.error("checks: site check failed", { site: site.name, error: err.message });
-    }
-  }
+let checksRunning = false;
 
-  for (const portCheck of listAllPortChecks().filter((p) => !p.site_paused)) {
-    try {
-      await checkPortMonitor(portCheck);
-    } catch (err) {
-      logger.error("checks: port check failed", { label: portCheck.label, error: err.message });
+export async function runChecks() {
+  // Guard against overlapping runs: if a slow cycle (many sites / timeouts)
+  // is still going when the next tick fires, skip rather than stack.
+  if (checksRunning) {
+    logger.warn("checks: previous run still in progress, skipping this tick");
+    return;
+  }
+  checksRunning = true;
+  try {
+    const sites = listSites().filter((s) => !s.paused);
+    for (const site of sites) {
+      try {
+        await checkSiteUptime(site);
+        await checkSiteSsl(site);
+      } catch (err) {
+        logger.error("checks: site check failed", { site: site.name, error: err.message });
+      }
     }
+
+    for (const portCheck of listAllPortChecks().filter((p) => !p.site_paused)) {
+      try {
+        await checkPortMonitor(portCheck);
+      } catch (err) {
+        logger.error("checks: port check failed", { label: portCheck.label, error: err.message });
+      }
+    }
+  } finally {
+    checksRunning = false;
   }
 }
 
@@ -165,6 +178,10 @@ export function startScheduler() {
   cron.schedule("*/5 * * * *", () =>
     evaluatePendingVerdicts().catch((err) => logger.error("fleet: evaluation failed", { error: err.message }))
   );
+  cron.schedule("*/5 * * * *", () => {
+    const recovered = recoverStuckCommands();
+    if (recovered) logger.warn("commands: requeued stuck running commands", { count: recovered });
+  });
   logger.info("scheduler: started", {
     checkIntervalMinutes: env.checkIntervalMinutes,
     dailySummaryHour: env.dailySummaryHour,
