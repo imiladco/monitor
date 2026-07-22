@@ -1,6 +1,13 @@
 import { env } from "../config.js";
 
-export async function checkUptime(url) {
+const BROWSER_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9,fa;q=0.8",
+};
+
+async function attempt(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.requestTimeoutMs);
   const start = Date.now();
@@ -10,7 +17,7 @@ export async function checkUptime(url) {
       method: "GET",
       redirect: "follow",
       signal: controller.signal,
-      headers: { "User-Agent": "wp-site-monitor" },
+      headers: BROWSER_HEADERS,
     });
     const responseMs = Date.now() - start;
     return {
@@ -31,4 +38,16 @@ export async function checkUptime(url) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// Many WordPress security plugins/WAFs (Wordfence, Cloudflare, iThemes...)
+// occasionally challenge or rate-limit a single request from a non-browser
+// client. A lone failure is retried once before being reported as down, so
+// a real browser-facing outage is what actually triggers an alert.
+export async function checkUptime(url) {
+  const first = await attempt(url);
+  if (first.up) return first;
+
+  await new Promise((r) => setTimeout(r, 3000));
+  return attempt(url);
 }
