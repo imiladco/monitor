@@ -10,6 +10,7 @@ import { publicStatusRouter } from "./routes/publicStatus.js";
 import { agentCommandsRouter } from "./routes/agentCommands.js";
 import { mcpRouter } from "./routes/mcp.js";
 import { requireAdmin } from "./auth.js";
+import { httpsEnforce } from "./httpsEnforce.js";
 import { runChecks, startScheduler } from "./scheduler.js";
 import { listSites, lastCheckTimestamp, getSetting, pruneExpiredSessions } from "./db.js";
 import { seedLocalVulnerabilities, runVulnerabilityScan } from "./vuln/index.js";
@@ -19,6 +20,11 @@ const VERSION = JSON.parse(fs.readFileSync(new URL("../package.json", import.met
 const startedAt = Date.now();
 
 const app = express();
+// Trust the reverse proxy (if any) so req.secure / req.ip reflect
+// X-Forwarded-Proto / X-Forwarded-For when TLS is terminated in front.
+app.set("trust proxy", env.forceHttps ? 1 : false);
+// Redirect to HTTPS + send HSTS when FORCE_HTTPS is on (no-op otherwise).
+app.use(httpsEnforce);
 // No CORS: the dashboard is served from the same origin as the API, and the
 // WordPress agent talks to it server-to-server (not from a browser), so no
 // cross-origin access is needed. A private admin panel shouldn't invite it.

@@ -8,6 +8,10 @@ export const env = {
   // http://), and be flipped on with SECURE_COOKIES=true once TLS is in front.
   sessionTtlHours: Number(process.env.SESSION_TTL_HOURS || 168),
   secureCookies: process.env.SECURE_COOKIES === "true",
+  // When TLS is terminated in front (nginx/Caddy), set FORCE_HTTPS=true to
+  // redirect plain-HTTP requests and send HSTS. Off by default so the panel
+  // still works on http:// during initial setup.
+  forceHttps: process.env.FORCE_HTTPS === "true",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
   telegramChatId: process.env.TELEGRAM_CHAT_ID,
   checkIntervalMinutes: Number(process.env.CHECK_INTERVAL_MINUTES || 5),
