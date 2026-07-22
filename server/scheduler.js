@@ -10,6 +10,7 @@ import { backupDatabase } from "./backup.js";
 import { runVulnerabilityScan } from "./vuln/index.js";
 import { evaluatePendingVerdicts } from "./fleet/index.js";
 import { pruneOldLogs } from "./logger.js";
+import { runRetention } from "./retention.js";
 import { logger } from "./logger.js";
 
 function hostnameOf(url) {
@@ -172,6 +173,7 @@ export function startScheduler() {
     backupDatabase();
     pruneOldLogs();
     pruneExpiredSessions();
+    runRetention();
   });
   cron.schedule(`0 ${env.vulnSyncHour} * * *`, () =>
     runVulnerabilityScan().catch((err) => logger.error("vuln: scan failed", { error: err.message }))

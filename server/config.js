@@ -21,6 +21,9 @@ export const env = {
   lcpWarnMs: Number(process.env.LCP_WARN_MS || 4000),
   domainWarnDays: Number(process.env.DOMAIN_WARN_DAYS || 30),
   backupHour: Number(process.env.BACKUP_HOUR ?? 4),
+  // How long to keep check/event history and screenshots. Must stay >= the
+  // longest SLA-report window (90 days) or those reports lose older data.
+  dataRetentionDays: Number(process.env.DATA_RETENTION_DAYS || 180),
   vulnSyncEnabled: process.env.VULN_SYNC_ENABLED !== "false",
   vulnSyncHour: Number(process.env.VULN_SYNC_HOUR ?? 5),
   vulnAlertMinSeverity: process.env.VULN_ALERT_MIN_SEVERITY || "high",
