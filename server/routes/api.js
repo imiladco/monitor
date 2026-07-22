@@ -55,6 +55,7 @@ apiRouter.get("/sites", (req, res) => {
   const sites = listSites().map((site) => {
     const uptime = latestCheck(site.id, "uptime");
     const ssl = latestCheck(site.id, "ssl");
+    const snapshot = latestSnapshot(site.id);
     return {
       id: site.id,
       name: site.name,
@@ -64,6 +65,8 @@ apiRouter.get("/sites", (req, res) => {
       sslDaysLeft: ssl?.ssl_days_left ?? null,
       lastCheckedAt: uptime?.checked_at ?? null,
       recentChecks: checkHistory(site.id, "uptime", 30).reverse(),
+      updatesCount: snapshot?.data?.updatesAvailable?.length ?? 0,
+      cveCount: activeSiteVulnerabilities(site.id).length,
       paused: Boolean(site.paused),
       public: Boolean(site.public),
       client: site.client,
