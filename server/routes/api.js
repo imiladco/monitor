@@ -38,6 +38,9 @@ import {
   deleteVulnerability,
   resolveSiteVulnerability,
   activeSiteVulnerabilities,
+  recentBadVerdicts,
+  listSiteHolds,
+  releaseHold,
 } from "../db.js";
 import { fleetVulnerabilities, runVulnerabilityScan } from "../vuln/index.js";
 
@@ -494,6 +497,23 @@ apiRouter.post("/sites/:id/vulnerabilities/:vulnId/resolve", (req, res) => {
 
 apiRouter.post("/vulnerabilities/scan", async (req, res) => {
   await runVulnerabilityScan();
+  res.json({ ok: true });
+});
+
+/* --- Fleet Learning (v2 phase B) --- */
+
+apiRouter.get("/fleet-alerts", (req, res) => {
+  res.json(recentBadVerdicts());
+});
+
+apiRouter.get("/sites/:id/holds", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  res.json(listSiteHolds(site.id));
+});
+
+apiRouter.post("/holds/:id/release", (req, res) => {
+  releaseHold(Number(req.params.id), "admin");
   res.json({ ok: true });
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import SiteCard from "../components/SiteCard.jsx";
+import FleetAlerts from "../components/FleetAlerts.jsx";
 import { useToast } from "../components/Toast.jsx";
 
 function AddSiteForm({ onAdded, onCancel }) {
@@ -117,6 +118,7 @@ export default function SitesList() {
 
   return (
     <div>
+      <FleetAlerts />
       <div className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-100">سایت‌ها</h2>
         <div className="flex items-center gap-3">

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getSiteByApiKey, claimPendingCommands, completeCommand, getSetting } from "../db.js";
+import { updateCheck } from "../fleet/index.js";
 
 export const agentCommandsRouter = Router();
 
@@ -26,6 +27,19 @@ agentCommandsRouter.get("/agent/commands", (req, res) => {
   if (getSetting("remote_actions_enabled", "0") !== "1") return res.json({ commands: [] });
 
   res.json({ commands: claimPendingCommands(site.id) });
+});
+
+// The agent calls this before showing/applying an update. If Fleet Learning
+// has flagged this exact upgrade path as bad on another site, hold=true and
+// the WP-admin banner explains why.
+agentCommandsRouter.get("/update-check", (req, res) => {
+  const site = authenticate(req, res);
+  if (!site) return;
+  const { plugin, from, to } = req.query;
+  if (!plugin || !from || !to) {
+    return res.status(400).json({ error: "plugin, from, and to query params are required" });
+  }
+  res.json(updateCheck(site.id, plugin, from, to));
 });
 
 agentCommandsRouter.post("/agent/commands/:id/result", (req, res) => {

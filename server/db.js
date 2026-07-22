@@ -141,6 +141,46 @@ CREATE TABLE IF NOT EXISTS site_vulnerabilities (
   UNIQUE(site_id, vulnerability_id)
 );
 CREATE INDEX IF NOT EXISTS idx_sitevuln_site ON site_vulnerabilities(site_id, resolved_at);
+
+-- Fleet Learning / Update Guard (v2 phase B). Deterministic, no AI.
+-- pending_verdicts is a persistent queue so a delayed evaluation survives
+-- a server restart.
+CREATE TABLE IF NOT EXISTS pending_verdicts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  plugin_slug TEXT NOT NULL,
+  from_version TEXT NOT NULL,
+  to_version TEXT NOT NULL,
+  event_at TEXT NOT NULL,
+  evaluate_after TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pending_verdicts_due ON pending_verdicts(evaluate_after);
+
+CREATE TABLE IF NOT EXISTS plugin_update_verdicts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  plugin_slug TEXT NOT NULL,
+  from_version TEXT NOT NULL,
+  to_version TEXT NOT NULL,
+  verdict TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  evidence_site_ids TEXT,
+  notes TEXT,
+  UNIQUE(plugin_slug, from_version, to_version)
+);
+
+CREATE TABLE IF NOT EXISTS update_holds (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  plugin_slug TEXT NOT NULL,
+  target_version TEXT NOT NULL,
+  reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  released_at TEXT,
+  released_by TEXT,
+  UNIQUE(site_id, plugin_slug, target_version)
+);
+CREATE INDEX IF NOT EXISTS idx_update_holds_site ON update_holds(site_id, released_at);
 `);
 
 // Lightweight migration: add columns that didn't exist in earlier releases
@@ -552,4 +592,109 @@ export function fleetVulnerabilities() {
        ORDER BY CASE v.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, sv.detected_at DESC`
     )
     .all();
+}
+
+/* --- Fleet Learning / Update Guard (v2 phase B) --- */
+
+export function enqueuePendingVerdict({ siteId, pluginSlug, fromVersion, toVersion, eventAt, evaluateAfter }) {
+  db.prepare(
+    `INSERT INTO pending_verdicts (site_id, plugin_slug, from_version, to_version, event_at, evaluate_after)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(siteId, pluginSlug, fromVersion, toVersion, eventAt, evaluateAfter);
+}
+
+export function duePendingVerdicts() {
+  return db.prepare("SELECT * FROM pending_verdicts WHERE evaluate_after <= datetime('now')").all();
+}
+
+export function deletePendingVerdict(id) {
+  db.prepare("DELETE FROM pending_verdicts WHERE id = ?").run(id);
+}
+
+// Uptime checks in a window, oldest first. Used to judge a post-update window.
+export function checksInWindow(siteId, type, startIso, endIso) {
+  return db
+    .prepare(
+      "SELECT * FROM checks WHERE site_id = ? AND type = ? AND checked_at >= ? AND checked_at < ? ORDER BY checked_at ASC"
+    )
+    .all(siteId, type, startIso, endIso);
+}
+
+export function recordVerdict({ pluginSlug, fromVersion, toVersion, verdict, evidenceSiteIds, notes }) {
+  db.prepare(
+    `INSERT INTO plugin_update_verdicts (plugin_slug, from_version, to_version, verdict, evidence_site_ids, notes)
+     VALUES (@pluginSlug, @fromVersion, @toVersion, @verdict, @evidenceSiteIds, @notes)
+     ON CONFLICT(plugin_slug, from_version, to_version) DO UPDATE SET
+       verdict=excluded.verdict, evidence_site_ids=excluded.evidence_site_ids,
+       notes=excluded.notes, last_updated_at=datetime('now')`
+  ).run({
+    pluginSlug,
+    fromVersion,
+    toVersion,
+    verdict,
+    evidenceSiteIds: JSON.stringify(evidenceSiteIds || []),
+    notes: notes || null,
+  });
+  return db
+    .prepare("SELECT * FROM plugin_update_verdicts WHERE plugin_slug = ? AND from_version = ? AND to_version = ?")
+    .get(pluginSlug, fromVersion, toVersion);
+}
+
+export function getVerdict(pluginSlug, fromVersion, toVersion) {
+  return db
+    .prepare("SELECT * FROM plugin_update_verdicts WHERE plugin_slug = ? AND from_version = ? AND to_version = ?")
+    .get(pluginSlug, fromVersion, toVersion);
+}
+
+export function recentBadVerdicts(limit = 50) {
+  return db
+    .prepare(
+      "SELECT * FROM plugin_update_verdicts WHERE verdict IN ('bad','suspicious') ORDER BY last_updated_at DESC LIMIT ?"
+    )
+    .all(limit)
+    .map((v) => ({ ...v, evidence_site_ids: v.evidence_site_ids ? JSON.parse(v.evidence_site_ids) : [] }));
+}
+
+export function createHold({ siteId, pluginSlug, targetVersion, reason }) {
+  db.prepare(
+    `INSERT INTO update_holds (site_id, plugin_slug, target_version, reason)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(site_id, plugin_slug, target_version) DO UPDATE SET
+       reason=excluded.reason, released_at=NULL, released_by=NULL, created_at=datetime('now')`
+  ).run(siteId, pluginSlug, targetVersion, reason || null);
+}
+
+export function activeHold(siteId, pluginSlug, targetVersion) {
+  return db
+    .prepare(
+      "SELECT * FROM update_holds WHERE site_id = ? AND plugin_slug = ? AND target_version = ? AND released_at IS NULL"
+    )
+    .get(siteId, pluginSlug, targetVersion);
+}
+
+export function listSiteHolds(siteId) {
+  return db
+    .prepare("SELECT * FROM update_holds WHERE site_id = ? AND released_at IS NULL ORDER BY created_at DESC")
+    .all(siteId);
+}
+
+export function releaseHold(id, releasedBy) {
+  db.prepare("UPDATE update_holds SET released_at = datetime('now'), released_by = ? WHERE id = ?").run(
+    releasedBy || "admin",
+    id
+  );
+}
+
+// Sites (other than the origin) whose installed version of the plugin equals
+// fromVersion — candidates to hold from applying toVersion. Reads the latest
+// agent snapshot per site.
+export function sitesWithPluginVersion(pluginSlug, version, excludeSiteId) {
+  const results = [];
+  for (const site of listSites()) {
+    if (site.id === excludeSiteId) continue;
+    const snap = latestSnapshot(site.id);
+    const plugin = snap?.data?.plugins?.find((p) => p.slug === pluginSlug);
+    if (plugin && plugin.version === version) results.push(site);
+  }
+  return results;
 }

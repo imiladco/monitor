@@ -3,6 +3,7 @@ import { getSiteByApiKey, latestSnapshot, saveSnapshot, recordEvent } from "../d
 import { diffSnapshot } from "../diff.js";
 import { notifySite } from "../notify/telegram.js";
 import { categoryForEventType } from "../telegramCategories.js";
+import { onPluginUpdate } from "../fleet/index.js";
 
 export const ingestRouter = Router();
 
@@ -24,6 +25,9 @@ ingestRouter.post("/ingest", async (req, res) => {
 
   for (const event of events) {
     recordEvent(site.id, { ...event, source: "agent" });
+    if (event.type === "plugin_update" && event.detail?.slug) {
+      onPluginUpdate(site.id, event.detail);
+    }
     if (event.severity === "critical" || event.severity === "warning") {
       await notifySite(site.id, `⏱ <b>${site.name}</b> — ${event.title}`, categoryForEventType(event.type));
     }

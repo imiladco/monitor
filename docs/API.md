@@ -72,6 +72,15 @@ Agent-facing (own `X-Api-Key` auth, not admin password):
 - `POST /sites/:id/vulnerabilities/:vulnId/resolve` — mark one site's finding resolved (false positive / manual fix)
 - `POST /vulnerabilities/scan` — trigger a scan now (also runs daily at `VULN_SYNC_HOUR`)
 
+## Fleet Learning / Update Guard
+
+- `GET /fleet-alerts` — recent bad/suspicious upgrade verdicts across the fleet
+- `GET /sites/:id/holds` — active update holds on one site
+- `POST /holds/:id/release` — lift a hold (admin)
+
+Agent-facing (own `X-Api-Key` auth):
+- `GET /update-check?plugin=&from=&to=` — `{ verdict, hold, reason, evidence_count }`; the agent calls this before showing/applying an update
+
 ## Settings
 
 - `GET /settings` / `PUT /settings` — Telegram bot token / chat id / group id (bot token is masked in responses)
