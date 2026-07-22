@@ -181,6 +181,17 @@ CREATE TABLE IF NOT EXISTS update_holds (
   UNIQUE(site_id, plugin_slug, target_version)
 );
 CREATE INDEX IF NOT EXISTS idx_update_holds_site ON update_holds(site_id, released_at);
+
+-- MCP access keys (v2 phase C). Separate from the admin password so MCP
+-- access can be granted/revoked independently. Only the SHA-256 hash is
+-- stored; the raw key is shown once at creation.
+CREATE TABLE IF NOT EXISTS mcp_api_keys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  key_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_used_at TEXT
+);
 `);
 
 // Lightweight migration: add columns that didn't exist in earlier releases
@@ -697,4 +708,27 @@ export function sitesWithPluginVersion(pluginSlug, version, excludeSiteId) {
     if (plugin && plugin.version === version) results.push(site);
   }
   return results;
+}
+
+/* --- MCP access keys (v2 phase C) --- */
+
+export function createMcpKey(name, keyHash) {
+  const info = db.prepare("INSERT INTO mcp_api_keys (name, key_hash) VALUES (?, ?)").run(name, keyHash);
+  return db.prepare("SELECT id, name, created_at, last_used_at FROM mcp_api_keys WHERE id = ?").get(info.lastInsertRowid);
+}
+
+export function listMcpKeys() {
+  return db.prepare("SELECT id, name, created_at, last_used_at FROM mcp_api_keys ORDER BY created_at DESC").all();
+}
+
+export function deleteMcpKey(id) {
+  db.prepare("DELETE FROM mcp_api_keys WHERE id = ?").run(id);
+}
+
+export function findMcpKeyByHash(keyHash) {
+  return db.prepare("SELECT * FROM mcp_api_keys WHERE key_hash = ?").get(keyHash);
+}
+
+export function touchMcpKey(id) {
+  db.prepare("UPDATE mcp_api_keys SET last_used_at = datetime('now') WHERE id = ?").run(id);
 }

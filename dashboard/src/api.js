@@ -110,6 +110,9 @@ export const api = {
   fleetAlerts: () => request("/fleet-alerts"),
   siteHolds: (siteId) => request(`/sites/${siteId}/holds`),
   releaseHold: (id) => request(`/holds/${id}/release`, { method: "POST" }),
+  mcpKeys: () => request("/settings/mcp-keys"),
+  createMcpKey: (name) => request("/settings/mcp-keys", { method: "POST", body: JSON.stringify({ name }) }),
+  deleteMcpKey: (id) => request(`/settings/mcp-keys/${id}`, { method: "DELETE" }),
 };
 
 export async function fetchPublicStatus(token) {

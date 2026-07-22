@@ -179,8 +179,16 @@ cd wp-agent && zip -r site-monitor-agent.zip site-monitor-agent
 - داشبورد: بنر «هشدارهای Fleet Learning» تو صفحه‌ی اصلی + بخش «آپدیت‌های hold‌شده» تو صفحه‌ی هر سایت با دکمه‌ی «آزاد کردن».
 - **بدون auto-apply**: این فاز فقط جلوی آپدیت‌های خراب رو می‌گیره، هیچ آپدیتی رو خودش نمی‌زنه.
 
+## MCP Server — فاز C از v2
+
+یه MCP server (`mcp-server/`) که ناوگانت رو به Claude Desktop/Code وصل می‌کنه تا به‌طور طبیعی درباره‌ی سایت‌هات سؤال بپرسی. راهنمای کامل: [`mcp-server/README.md`](mcp-server/README.md).
+
+- **HTTP-based** (نه خوندن مستقیم DB): روی لپ‌تاپت با stdio اجرا می‌شه ولی داده رو از HTTP API مانیتور می‌گیره — پس نیازی نیست `data/monitor.db` روی همون دستگاه باشه.
+- **کلید جدا از رمز پنل**: تنظیمات → دسترسی MCP → کلید بساز/لغو کن (فقط هش SHA-256 ذخیره می‌شه، کلید خام فقط یک‌بار نمایش داده می‌شه). این‌طوری دسترسی MCP رو مستقل از رمز ادمین می‌تونی بدی/بگیری.
+- **۹ tool خواندنی**: `list_sites`, `get_site_details`, `get_uptime_history`, `get_timeline`, `get_incidents`, `get_fleet_summary`, `search_across_fleet`, `get_plugin_across_fleet`, `get_vulnerabilities`. هیچ اکشن مخربی و هیچ خوندن secret.
+
 ## فازهای بعدی (هنوز ساخته نشده)
 
-- MCP Server (فاز C از v2) — اتصال Claude Desktop/Code به ناوگان
 - بلک‌لیست گوگل سیفتی‌براوزینگ (نیاز به API key داره)
+- شبیه‌سازی واقعی فلوی خرید با Playwright
 - شبیه‌سازی واقعی فلوی خرید با Playwright (اضافه به کروم، مرحله‌به‌مرحله سبد خرید → چک‌اوت)
