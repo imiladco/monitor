@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS checks (
 );
 CREATE INDEX IF NOT EXISTS idx_checks_site_time ON checks(site_id, checked_at);
 
+CREATE TABLE IF NOT EXISTS screenshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  path TEXT NOT NULL,
+  diff_percent REAL,
+  lcp_ms INTEGER,
+  cls REAL,
+  ttfb_ms INTEGER,
+  captured_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_screenshots_site_time ON screenshots(site_id, captured_at);
+
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
@@ -122,6 +134,27 @@ export function eventTimeline(siteId, limit = 200) {
     .prepare("SELECT * FROM events WHERE site_id = ? ORDER BY occurred_at DESC LIMIT ?")
     .all(siteId, limit)
     .map((e) => ({ ...e, detail: e.detail ? JSON.parse(e.detail) : null }));
+}
+
+export function recordScreenshot(siteId, { path, diffPercent, lcpMs, cls, ttfbMs }) {
+  db.prepare(
+    `INSERT INTO screenshots (site_id, path, diff_percent, lcp_ms, cls, ttfb_ms) VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(siteId, path, diffPercent ?? null, lcpMs ?? null, cls ?? null, ttfbMs ?? null);
+}
+
+export function latestScreenshot(siteId) {
+  return db
+    .prepare("SELECT * FROM screenshots WHERE site_id = ? ORDER BY captured_at DESC LIMIT 1")
+    .get(siteId);
+}
+
+export function vitalsHistory(siteId, limit = 60) {
+  return db
+    .prepare(
+      "SELECT lcp_ms, cls, ttfb_ms, captured_at FROM screenshots WHERE site_id = ? ORDER BY captured_at DESC LIMIT ?"
+    )
+    .all(siteId, limit)
+    .reverse();
 }
 
 export function latestSnapshot(siteId) {

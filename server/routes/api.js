@@ -1,4 +1,5 @@
 import { Router } from "express";
+import fs from "node:fs";
 import {
   listSites,
   getSiteById,
@@ -6,6 +7,8 @@ import {
   checkHistory,
   eventTimeline,
   latestSnapshot,
+  latestScreenshot,
+  vitalsHistory,
 } from "../db.js";
 
 export const apiRouter = Router();
@@ -31,6 +34,8 @@ apiRouter.get("/sites/:id", (req, res) => {
   const site = getSiteById(req.params.id);
   if (!site) return res.status(404).json({ error: "not found" });
   const snapshot = latestSnapshot(site.id);
+  const domain = latestCheck(site.id, "domain");
+  const screenshot = latestScreenshot(site.id);
   res.json({
     id: site.id,
     name: site.name,
@@ -39,7 +44,27 @@ apiRouter.get("/sites/:id", (req, res) => {
     apiKey: site.api_key,
     agent: snapshot?.data ?? null,
     agentLastSeen: snapshot?.captured_at ?? null,
+    domainDaysLeft: domain?.ssl_days_left ?? null,
+    screenshot: screenshot
+      ? {
+          capturedAt: screenshot.captured_at,
+          diffPercent: screenshot.diff_percent,
+          lcpMs: screenshot.lcp_ms,
+          cls: screenshot.cls,
+          ttfbMs: screenshot.ttfb_ms,
+        }
+      : null,
   });
+});
+
+apiRouter.get("/sites/:id/screenshot", (req, res) => {
+  const shot = latestScreenshot(req.params.id);
+  if (!shot || !fs.existsSync(shot.path)) return res.status(404).end();
+  res.sendFile(shot.path);
+});
+
+apiRouter.get("/sites/:id/vitals", (req, res) => {
+  res.json(vitalsHistory(req.params.id));
 });
 
 apiRouter.get("/sites/:id/checks", (req, res) => {
