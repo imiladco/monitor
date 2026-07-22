@@ -229,6 +229,18 @@ CREATE TABLE IF NOT EXISTS incidents (
 );
 CREATE INDEX IF NOT EXISTS idx_incidents_site_status ON incidents(site_id, status);
 CREATE INDEX IF NOT EXISTS idx_incidents_open ON incidents(status, type);
+
+-- Daily uptime rollups. Kept indefinitely so long-term history survives the
+-- raw-check retention window (raw checks are pruned after DATA_RETENTION_DAYS).
+CREATE TABLE IF NOT EXISTS uptime_daily (
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  day TEXT NOT NULL,
+  total_checks INTEGER NOT NULL,
+  up_checks INTEGER NOT NULL,
+  uptime_pct REAL NOT NULL,
+  avg_response_ms INTEGER,
+  PRIMARY KEY (site_id, day)
+);
 `);
 
 // Lightweight migration: add columns that didn't exist in earlier releases
@@ -629,6 +641,63 @@ export function siteIncidents(siteId, limit = 50) {
 
 export function getIncident(id) {
   return db.prepare("SELECT * FROM incidents WHERE id = ?").get(id);
+}
+
+// --- Data aggregation & DB health -------------------------------------------
+
+// Roll up raw uptime checks into per-site, per-day summaries. Re-runs are
+// idempotent (upsert), so re-aggregating a partial day just refreshes it.
+export function aggregateUptimeDaily() {
+  const rows = db
+    .prepare(
+      `SELECT site_id, date(checked_at) AS day,
+              COUNT(*) AS total,
+              SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS up,
+              CAST(AVG(CASE WHEN ok = 1 THEN response_ms END) AS INTEGER) AS avg_ms
+       FROM checks WHERE type = 'uptime'
+       GROUP BY site_id, date(checked_at)`
+    )
+    .all();
+  const upsert = db.prepare(
+    `INSERT INTO uptime_daily (site_id, day, total_checks, up_checks, uptime_pct, avg_response_ms)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(site_id, day) DO UPDATE SET
+       total_checks = excluded.total_checks, up_checks = excluded.up_checks,
+       uptime_pct = excluded.uptime_pct, avg_response_ms = excluded.avg_response_ms`
+  );
+  db.transaction(() => {
+    for (const r of rows) {
+      const pct = r.total ? Number(((r.up / r.total) * 100).toFixed(2)) : 0;
+      upsert.run(r.site_id, r.day, r.total, r.up, pct, r.avg_ms ?? null);
+    }
+  })();
+  return rows.length;
+}
+
+export function getUptimeDaily(siteId, days = 90) {
+  return db
+    .prepare(
+      `SELECT day, total_checks, up_checks, uptime_pct, avg_response_ms
+       FROM uptime_daily WHERE site_id = ? AND day >= date('now', ?) ORDER BY day`
+    )
+    .all(siteId, `-${Number(days)} days`);
+}
+
+// Size of the live DB plus its WAL/SHM sidecars.
+export function dbFileSizeBytes() {
+  let total = 0;
+  for (const suffix of ["", "-wal", "-shm"]) {
+    try {
+      total += fs.statSync(DB_PATH + suffix).size;
+    } catch {
+      // sidecar may not exist
+    }
+  }
+  return total;
+}
+
+export function vacuum() {
+  db.exec("VACUUM");
 }
 
 // Retention: drop check/event history and screenshot rows older than the

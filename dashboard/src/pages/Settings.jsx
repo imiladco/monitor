@@ -6,6 +6,7 @@ import TwoFactorSettings from "../components/TwoFactorSettings.jsx";
 import RemoteActionsToggle from "../components/RemoteActionsToggle.jsx";
 import BrandingSettings from "../components/BrandingSettings.jsx";
 import McpAccess from "../components/McpAccess.jsx";
+import SystemHealth from "../components/SystemHealth.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { useToast } from "../components/Toast.jsx";
 
@@ -80,6 +81,7 @@ export default function SettingsPage() {
       <RemoteActionsToggle />
       <BrandingSettings />
       <McpAccess />
+      <SystemHealth />
 
       <h3 className="mb-3 mt-8 font-medium text-gray-100">تلگرام</h3>
       <form onSubmit={submit} className="max-w-md space-y-4 rounded-2xl border border-border bg-panel p-6">

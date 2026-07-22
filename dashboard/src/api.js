@@ -100,6 +100,7 @@ export const api = {
     request(`/sites/${siteId}/vulnerabilities/${vulnId}/resolve`, { method: "POST" }),
   rescanVulnerabilities: () => request("/vulnerabilities/scan", { method: "POST" }),
   fleetAlerts: () => request("/fleet-alerts"),
+  system: () => request("/system"),
   incidents: (status = "open") => request(`/incidents?status=${status}`),
   siteIncidents: (siteId) => request(`/sites/${siteId}/incidents`),
   acknowledgeIncident: (id) => request(`/incidents/${id}/acknowledge`, { method: "POST" }),

@@ -12,6 +12,7 @@ import { runVulnerabilityScan } from "./vuln/index.js";
 import { evaluatePendingVerdicts } from "./fleet/index.js";
 import { pruneOldLogs } from "./logger.js";
 import { runRetention } from "./retention.js";
+import { runSystemMaintenance } from "./systemHealth.js";
 import { logger } from "./logger.js";
 
 function hostnameOf(url) {
@@ -175,11 +176,14 @@ export function startScheduler() {
   cron.schedule(`0 ${env.deepCheckHour} * * *`, () =>
     runDeepChecks().catch((err) => logger.error("deep-check: run failed", { error: err.message }))
   );
-  cron.schedule(`0 ${env.backupHour} * * *`, () => {
-    backupDatabase();
+  cron.schedule(`0 ${env.backupHour} * * *`, async () => {
+    await backupDatabase();
     pruneOldLogs();
     pruneExpiredSessions();
     runRetention();
+    // Aggregate, VACUUM, verify backup, and alert on low disk — after the
+    // fresh backup and retention prune so it reflects the trimmed DB.
+    await runSystemMaintenance().catch((err) => logger.error("system: maintenance failed", { error: err.message }));
   });
   cron.schedule(`0 ${env.vulnSyncHour} * * *`, () =>
     runVulnerabilityScan().catch((err) => logger.error("vuln: scan failed", { error: err.message }))
