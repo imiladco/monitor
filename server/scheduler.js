@@ -2,8 +2,9 @@ import cron from "node-cron";
 import { env } from "./config.js";
 import { checkUptime } from "./checks/uptime.js";
 import { checkSsl } from "./checks/ssl.js";
-import { sendTelegram } from "./notify/telegram.js";
-import { listSites, recordCheck, latestCheck, recordEvent } from "./db.js";
+import { checkPort } from "./checks/port.js";
+import { sendTelegram, notifySite } from "./notify/telegram.js";
+import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks } from "./db.js";
 import { runDeepChecks } from "./deepChecks.js";
 import { backupDatabase } from "./backup.js";
 import { pruneOldLogs } from "./logger.js";
@@ -33,7 +34,7 @@ async function checkSiteUptime(site) {
       ? `🟢 برگشت آنلاین (${result.responseMs}ms)`
       : `🔴 از دسترس خارج شد — ${result.error || `HTTP ${result.statusCode}`}`;
     recordEvent(site.id, { type: "uptime_change", title, severity: result.up ? "info" : "critical" });
-    await sendTelegram(`<b>${site.name}</b> ${title}\n${site.url}`, "status");
+    await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "status");
   }
 
   if (result.up && prev) {
@@ -41,7 +42,7 @@ async function checkSiteUptime(site) {
     if (result.slow && !wasSlow) {
       const title = `🐢 کند شد: ${result.responseMs}ms`;
       recordEvent(site.id, { type: "slow_response", title, severity: "warning" });
-      await sendTelegram(`<b>${site.name}</b> ${title}\n${site.url}`, "performance");
+      await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "performance");
     } else if (!result.slow && wasSlow) {
       recordEvent(site.id, {
         type: "slow_response_recovered",
@@ -65,7 +66,7 @@ async function checkSiteUptime(site) {
     if (checkoutWasUp !== checkoutResult.up) {
       const title = checkoutResult.up ? "🟢 صفحه‌ی چک‌اوت دوباره سالمه" : "🔴 صفحه‌ی چک‌اوت خرابه";
       recordEvent(site.id, { type: "checkout_change", title, severity: checkoutResult.up ? "info" : "critical" });
-      await sendTelegram(`<b>${site.name}</b> ${title}\n${site.checkout_url}`, "status");
+      await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.checkout_url}`, "status");
     }
   }
 }
@@ -93,7 +94,23 @@ async function checkSiteSsl(site) {
   if (shouldWarn && !alreadyWarned) {
     const title = `⚠️ گواهی SSL تا ${result.daysLeft} روز دیگه منقضی می‌شه`;
     recordEvent(site.id, { type: "ssl_warning", title, severity: "warning" });
-    await sendTelegram(`<b>${site.name}</b> ${title}`, "ssl");
+    await notifySite(site.id, `<b>${site.name}</b> ${title}`, "ssl");
+  }
+}
+
+async function checkPortMonitor(portCheck) {
+  const type = `port:${portCheck.id}`;
+  const prev = latestCheck(portCheck.site_id, type);
+  const result = await checkPort(portCheck.host, portCheck.port);
+  recordCheck(portCheck.site_id, { type, ok: result.ok, responseMs: result.responseMs, error: result.error });
+
+  const wasUp = prev ? Boolean(prev.ok) : true;
+  if (wasUp !== result.ok) {
+    const title = result.ok
+      ? `🟢 پورت ${portCheck.label} (${portCheck.host}:${portCheck.port}) دوباره باز شد`
+      : `🔴 پورت ${portCheck.label} (${portCheck.host}:${portCheck.port}) بسته شد — ${result.error}`;
+    recordEvent(portCheck.site_id, { type: "port_change", title, severity: result.ok ? "info" : "critical" });
+    await notifySite(portCheck.site_id, `<b>${portCheck.site_name}</b> ${title}`, "status");
   }
 }
 
@@ -105,6 +122,14 @@ export async function runChecks() {
       await checkSiteSsl(site);
     } catch (err) {
       logger.error("checks: site check failed", { site: site.name, error: err.message });
+    }
+  }
+
+  for (const portCheck of listAllPortChecks().filter((p) => !p.site_paused)) {
+    try {
+      await checkPortMonitor(portCheck);
+    } catch (err) {
+      logger.error("checks: port check failed", { label: portCheck.label, error: err.message });
     }
   }
 }

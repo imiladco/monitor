@@ -11,6 +11,7 @@ export const CATEGORIES = [
 const EVENT_TYPE_TO_CATEGORY = {
   uptime_change: "status",
   checkout_change: "status",
+  port_change: "status",
   ssl_warning: "ssl",
   domain_warning: "domain",
   visual_change: "performance",

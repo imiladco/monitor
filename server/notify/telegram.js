@@ -1,5 +1,5 @@
 import { env } from "../config.js";
-import { getSetting, getTelegramTopic } from "../db.js";
+import { getSetting, getTelegramTopic, isInMaintenanceWindow } from "../db.js";
 import { logger } from "../logger.js";
 
 export async function sendTelegram(text, category = null) {
@@ -41,6 +41,17 @@ export async function sendTelegram(text, category = null) {
   }
 
   return { ok: true };
+}
+
+// Wraps sendTelegram with a maintenance-window check so scheduled,
+// planned work (deploys, updates) doesn't page anyone — the underlying
+// event is still recorded in the timeline, just not pushed to Telegram.
+export async function notifySite(siteId, text, category = null) {
+  if (isInMaintenanceWindow(siteId)) {
+    logger.info("telegram: suppressed by maintenance window", { siteId });
+    return { ok: true, suppressed: true };
+  }
+  return sendTelegram(text, category);
 }
 
 export async function callTelegramApi(method, params) {

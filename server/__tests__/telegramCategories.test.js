@@ -7,6 +7,7 @@ test("categoryForEventType maps every known event type to a valid category", () 
   const knownTypes = [
     "uptime_change",
     "checkout_change",
+    "port_change",
     "ssl_warning",
     "domain_warning",
     "visual_change",

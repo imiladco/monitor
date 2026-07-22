@@ -5,7 +5,7 @@ import { auditPage } from "./checks/pageAudit.js";
 import { diffPercent } from "./checks/visualDiff.js";
 import { checkDomainExpiry } from "./checks/domain.js";
 import { listSites, latestScreenshot, recordScreenshot, recordCheck, latestCheck, recordEvent } from "./db.js";
-import { sendTelegram } from "./notify/telegram.js";
+import { notifySite } from "./notify/telegram.js";
 import { logger } from "./logger.js";
 
 const SCREENSHOT_DIR = path.resolve("data/screenshots");
@@ -55,7 +55,8 @@ async function runVisualAndVitals(site) {
       severity: diff >= 40 ? "critical" : "warning",
       source: "external",
     });
-    await sendTelegram(
+    await notifySite(
+      site.id,
       `<b>${site.name}</b> — ${diff.toFixed(1)}٪ تغییر ظاهری در هوم‌پیج تشخیص داده شد\n${site.url}`,
       "performance"
     );
@@ -72,7 +73,7 @@ async function runVisualAndVitals(site) {
         title: `🐌 LCP بدتر شد: ${audit.lcpMs}ms (بالاتر از حد قابل قبول)`,
         severity: "warning",
       });
-      await sendTelegram(`<b>${site.name}</b> — سرعت بارگذاری (LCP) افت کرد: ${audit.lcpMs}ms`, "performance");
+      await notifySite(site.id, `<b>${site.name}</b> — سرعت بارگذاری (LCP) افت کرد: ${audit.lcpMs}ms`, "performance");
     }
   }
 }
@@ -94,7 +95,7 @@ async function runDomainCheck(site) {
   if (shouldWarn && !alreadyWarned) {
     const title = `🌐 دامنه تا ${result.daysLeft} روز دیگه منقضی می‌شه`;
     recordEvent(site.id, { type: "domain_warning", title, severity: "warning" });
-    await sendTelegram(`<b>${site.name}</b> ${title}`, "domain");
+    await notifySite(site.id, `<b>${site.name}</b> ${title}`, "domain");
   }
 }
 
