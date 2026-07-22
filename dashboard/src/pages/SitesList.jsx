@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import FleetAlerts from "../components/FleetAlerts.jsx";
 import Sparkline from "../components/Sparkline.jsx";
+import SitePanel from "../components/SitePanel.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 
@@ -214,11 +215,10 @@ function RowMenu({ site, onChanged }) {
   );
 }
 
-function SiteRow({ site, onChanged }) {
-  const navigate = useNavigate();
+function SiteRow({ site, onChanged, onOpen }) {
   return (
     <tr
-      onClick={() => navigate(`/sites/${site.id}`)}
+      onClick={() => onOpen(site.id)}
       className="cursor-pointer border-b border-border hover:bg-surface-hover"
     >
       <td className="w-6 pr-0 pl-0 text-center">
@@ -287,6 +287,7 @@ export default function SitesList() {
   const [clientFilter, setClientFilter] = useState("all");
   const [pill, setPill] = useState("all");
   const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
   const [params, setParams] = useSearchParams();
 
   const sort = params.get("sort") || "status";
@@ -461,7 +462,7 @@ export default function SitesList() {
             </thead>
             <tbody>
               {visible.map((site) => (
-                <SiteRow key={site.id} site={site} onChanged={load} />
+                <SiteRow key={site.id} site={site} onChanged={load} onOpen={setSelectedId} />
               ))}
             </tbody>
           </table>
@@ -469,6 +470,10 @@ export default function SitesList() {
             <div className="px-4 py-8 text-center text-xs text-muted">هیچ سایتی با این فیلترها پیدا نشد.</div>
           )}
         </div>
+      )}
+
+      {selectedId != null && (
+        <SitePanel key={selectedId} siteId={selectedId} onClose={() => setSelectedId(null)} />
       )}
     </div>
   );
