@@ -5,6 +5,9 @@ import { checkSsl } from "./checks/ssl.js";
 import { sendTelegram } from "./notify/telegram.js";
 import { listSites, recordCheck, latestCheck, recordEvent } from "./db.js";
 import { runDeepChecks } from "./deepChecks.js";
+import { backupDatabase } from "./backup.js";
+import { pruneOldLogs } from "./logger.js";
+import { logger } from "./logger.js";
 
 function hostnameOf(url) {
   return new URL(url).hostname;
@@ -101,7 +104,7 @@ export async function runChecks() {
       await checkSiteUptime(site);
       await checkSiteSsl(site);
     } catch (err) {
-      console.error(`[checks] ${site.name} failed:`, err.message);
+      logger.error("checks: site check failed", { site: site.name, error: err.message });
     }
   }
 }
@@ -123,9 +126,15 @@ export function startScheduler() {
   cron.schedule(`*/${env.checkIntervalMinutes} * * * *`, runChecks);
   cron.schedule(`0 ${env.dailySummaryHour} * * *`, sendDailySummary);
   cron.schedule(`0 ${env.deepCheckHour} * * *`, () =>
-    runDeepChecks().catch((err) => console.error("[deep-check] run failed:", err.message))
+    runDeepChecks().catch((err) => logger.error("deep-check: run failed", { error: err.message }))
   );
-  console.log(
-    `[scheduler] checks every ${env.checkIntervalMinutes}m, daily summary at ${env.dailySummaryHour}:00, deep checks (visual/CWV/domain) at ${env.deepCheckHour}:00`
-  );
+  cron.schedule(`0 ${env.backupHour} * * *`, () => {
+    backupDatabase();
+    pruneOldLogs();
+  });
+  logger.info("scheduler: started", {
+    checkIntervalMinutes: env.checkIntervalMinutes,
+    dailySummaryHour: env.dailySummaryHour,
+    deepCheckHour: env.deepCheckHour,
+  });
 }

@@ -10,10 +10,25 @@ import { authRouter } from "./routes/auth.js";
 import { publicStatusRouter } from "./routes/publicStatus.js";
 import { requireAdmin } from "./auth.js";
 import { runChecks, startScheduler } from "./scheduler.js";
+import { listSites, lastCheckTimestamp } from "./db.js";
+import { logger, pruneOldLogs } from "./logger.js";
+
+const VERSION = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url))).version;
+const startedAt = Date.now();
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    ok: true,
+    version: VERSION,
+    uptimeSec: Math.round((Date.now() - startedAt) / 1000),
+    sitesCount: listSites().length,
+    lastCheckAt: lastCheckTimestamp(),
+  });
+});
 
 app.use("/api/auth", authRouter);
 app.use("/api", ingestRouter); // agent snapshots/events authenticate with their own per-site key
@@ -30,6 +45,7 @@ if (fs.existsSync(dashboardDist)) {
 }
 
 async function main() {
+  pruneOldLogs();
   seedSitesFromConfig();
 
   const once = process.argv.includes("--once");
@@ -40,14 +56,14 @@ async function main() {
 
   startScheduler();
   app.listen(env.port, () => {
-    console.log(`[server] listening on http://localhost:${env.port}`);
+    logger.info("server: listening", { port: env.port, version: VERSION });
     if (!fs.existsSync(dashboardDist)) {
-      console.log(`[server] dashboard not built yet — run "npm run build" in dashboard/`);
+      logger.warn("server: dashboard not built yet — run npm run build:dashboard");
     }
   });
 }
 
 main().catch((err) => {
-  console.error(err);
+  logger.error("server: fatal startup error", { error: err.message });
   process.exit(1);
 });

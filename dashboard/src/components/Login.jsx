@@ -3,6 +3,8 @@ import { api, getPassword } from "../api.js";
 
 export default function Login({ onSuccess }) {
   const [password, setPasswordInput] = useState("");
+  const [code, setCode] = useState("");
+  const [need2fa, setNeed2fa] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -11,10 +13,11 @@ export default function Login({ onSuccess }) {
     setLoading(true);
     setError(null);
     try {
-      await api.login(password);
+      await api.login(password, code);
       onSuccess();
     } catch (err) {
       setError(err.message);
+      if (err.require2fa) setNeed2fa(true);
     } finally {
       setLoading(false);
     }
@@ -33,10 +36,22 @@ export default function Login({ onSuccess }) {
           placeholder="رمز عبور"
           className="w-full rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
         />
+        {need2fa && (
+          <input
+            type="text"
+            inputMode="numeric"
+            autoFocus
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="کد ۶ رقمی Authenticator"
+            dir="ltr"
+            className="mt-2 w-full rounded-lg border border-border bg-panel2 px-3 py-2 text-center text-gray-100 outline-none focus:border-accent"
+          />
+        )}
         {error && <p className="mt-2 text-sm text-bad">{error}</p>}
         <button
           type="submit"
-          disabled={loading || !password}
+          disabled={loading || !password || (need2fa && !code)}
           className="mt-4 w-full rounded-lg bg-accent px-3 py-2 font-medium text-white disabled:opacity-50"
         >
           {loading ? "..." : "ورود"}

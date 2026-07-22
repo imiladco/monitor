@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 
-const DB_PATH = path.resolve("data/monitor.db");
+const DB_PATH = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.resolve("data/monitor.db");
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 export const db = new Database(DB_PATH);
@@ -265,4 +265,9 @@ export function latestSnapshot(siteId) {
 
 export function saveSnapshot(siteId, data) {
   db.prepare("INSERT INTO snapshots (site_id, data) VALUES (?, ?)").run(siteId, JSON.stringify(data));
+}
+
+export function lastCheckTimestamp() {
+  const row = db.prepare("SELECT MAX(checked_at) AS t FROM checks").get();
+  return row?.t ?? null;
 }
