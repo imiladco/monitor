@@ -52,6 +52,7 @@ import {
 } from "../db.js";
 import { hashMcpKey } from "../mcpAuth.js";
 import { fleetVulnerabilities, runVulnerabilityScan } from "../vuln/index.js";
+import { systemStatus } from "../systemHealth.js";
 
 export const apiRouter = Router();
 
@@ -327,6 +328,11 @@ apiRouter.post("/settings/telegram-topics/:category/test", async (req, res) => {
 
   const result = await sendTelegram(`${category.icon} پیام تست برای دسته‌ی «${category.label}»`, category.key);
   res.json(result);
+});
+
+// Storage/backup health for the settings page.
+apiRouter.get("/system", (req, res) => {
+  res.json(systemStatus());
 });
 
 // Fleet incidents. ?status=open (default filterless returns all recent).
