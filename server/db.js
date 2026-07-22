@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -228,6 +229,26 @@ if (!existingCommandColumns.has("claimed_at")) {
   db.exec("ALTER TABLE commands ADD COLUMN claimed_at TEXT");
 }
 
+// Agent API keys are stored only as a SHA-256 hash, never in plaintext — the
+// raw key is shown once at create/regenerate time. The api_key column is
+// repurposed to hold the hash (it's already NOT NULL UNIQUE, and SQLite can't
+// easily drop a NOT NULL constraint to add a separate nullable column).
+function hashApiKey(raw) {
+  return crypto.createHash("sha256").update(String(raw)).digest("hex");
+}
+
+// One-time migration: hash any existing plaintext keys in place. Existing
+// agents keep working — they send the plaintext, which we hash and match.
+// Guarded by a settings marker so it runs exactly once.
+if (!db.prepare("SELECT 1 FROM settings WHERE key = 'agent_keys_hashed'").get()) {
+  const rows = db.prepare("SELECT id, api_key FROM sites").all();
+  const upd = db.prepare("UPDATE sites SET api_key = ? WHERE id = ?");
+  db.transaction(() => {
+    for (const r of rows) upd.run(hashApiKey(r.api_key), r.id);
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('agent_keys_hashed', '1')").run();
+  })();
+}
+
 export function upsertSite({ name, url, checkoutUrl, apiKey }) {
   const existing = db.prepare("SELECT * FROM sites WHERE url = ?").get(url);
   if (existing) {
@@ -240,7 +261,7 @@ export function upsertSite({ name, url, checkoutUrl, apiKey }) {
   }
   const info = db
     .prepare("INSERT INTO sites (name, url, checkout_url, api_key) VALUES (?, ?, ?, ?)")
-    .run(name, url, checkoutUrl || null, apiKey);
+    .run(name, url, checkoutUrl || null, hashApiKey(apiKey));
   return db.prepare("SELECT * FROM sites WHERE id = ?").get(info.lastInsertRowid);
 }
 
@@ -253,8 +274,16 @@ export function createSite({ name, url, checkoutUrl, apiKey, keyword, keywordMod
     .prepare(
       "INSERT INTO sites (name, url, checkout_url, api_key, keyword, keyword_mode, client) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
-    .run(name, url, checkoutUrl || null, apiKey, keyword || null, keywordMode || "present", client || null);
+    .run(name, url, checkoutUrl || null, hashApiKey(apiKey), keyword || null, keywordMode || "present", client || null);
   return db.prepare("SELECT * FROM sites WHERE id = ?").get(info.lastInsertRowid);
+}
+
+// Rotates a site's agent key. Returns the new raw key (shown once) or null if
+// the site doesn't exist. Only the hash is persisted.
+export function regenerateSiteApiKey(id) {
+  const raw = crypto.randomBytes(24).toString("hex");
+  const info = db.prepare("UPDATE sites SET api_key = ? WHERE id = ?").run(hashApiKey(raw), id);
+  return info.changes === 1 ? raw : null;
 }
 
 export function updateSite(id, { name, url, checkoutUrl, keyword, keywordMode, client }) {
@@ -328,7 +357,8 @@ export function setSetting(key, value) {
 }
 
 export function getSiteByApiKey(apiKey) {
-  return db.prepare("SELECT * FROM sites WHERE api_key = ?").get(apiKey);
+  if (!apiKey) return undefined;
+  return db.prepare("SELECT * FROM sites WHERE api_key = ?").get(hashApiKey(apiKey));
 }
 
 export function getSiteById(id) {

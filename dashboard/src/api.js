@@ -49,6 +49,7 @@ export const api = {
   createSite: (data) => request("/sites", { method: "POST", body: JSON.stringify(data) }),
   updateSite: (id, data) => request(`/sites/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteSite: (id) => request(`/sites/${id}`, { method: "DELETE" }),
+  regenerateSiteKey: (id) => request(`/sites/${id}/regenerate-key`, { method: "POST" }),
   checks: (id, type = "uptime", limit = 100) => request(`/sites/${id}/checks?type=${type}&limit=${limit}`),
   timeline: (id, limit = 200) => request(`/sites/${id}/timeline?limit=${limit}`),
   settings: () => request("/settings"),

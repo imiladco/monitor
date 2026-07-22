@@ -27,9 +27,10 @@ All admin routes below require a valid session cookie unless noted otherwise. `P
 ## Sites
 
 - `GET /sites` — list with live status, recent-check bars, pause/public/client flags
-- `POST /sites` — `{ name, url, checkoutUrl?, keyword?, keywordMode?, client? }`
-- `GET /sites/:id` — full detail incl. agent snapshot, uptime %, domain/SSL, screenshot info
+- `POST /sites` — `{ name, url, checkoutUrl?, keyword?, keywordMode?, client? }` → `{ id, apiKey }`. The agent `apiKey` is returned **once**; only its SHA-256 hash is stored, so it can't be shown again.
+- `GET /sites/:id` — full detail incl. agent snapshot, uptime %, domain/SSL, screenshot info. Returns `hasAgentKey` (boolean), never the key itself.
 - `PUT /sites/:id` — same body shape as create
+- `POST /sites/:id/regenerate-key` → `{ apiKey }` — rotates the agent key and returns the new raw key once. The old key stops working immediately; update the WordPress agent with the new one.
 - `DELETE /sites/:id`
 - `PATCH /sites/:id/pause` — `{ paused: boolean }`
 - `PATCH /sites/:id/public` — `{ public: boolean }` — include on the public status page

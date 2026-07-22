@@ -11,6 +11,7 @@ import {
   createSite,
   updateSite,
   deleteSite,
+  regenerateSiteApiKey,
   setSitePaused,
   setSitePublic,
   uptimePercent,
@@ -79,16 +80,10 @@ apiRouter.post("/sites", (req, res) => {
   } catch {
     return res.status(400).json({ error: "invalid url" });
   }
-  const site = createSite({
-    name,
-    url,
-    checkoutUrl,
-    keyword,
-    keywordMode,
-    client,
-    apiKey: crypto.randomBytes(24).toString("hex"),
-  });
-  res.status(201).json({ id: site.id });
+  const apiKey = crypto.randomBytes(24).toString("hex");
+  const site = createSite({ name, url, checkoutUrl, keyword, keywordMode, client, apiKey });
+  // Returned exactly once — only the hash is stored, so it can't be shown again.
+  res.status(201).json({ id: site.id, apiKey });
 });
 
 apiRouter.put("/sites/:id", (req, res) => {
@@ -103,6 +98,14 @@ apiRouter.put("/sites/:id", (req, res) => {
   }
   updateSite(site.id, { name, url, checkoutUrl, keyword, keywordMode, client });
   res.json({ ok: true });
+});
+
+// Rotate the agent key. Returns the new raw key once; the old key stops
+// working immediately, so the WordPress agent must be updated with the new one.
+apiRouter.post("/sites/:id/regenerate-key", (req, res) => {
+  const apiKey = regenerateSiteApiKey(Number(req.params.id));
+  if (!apiKey) return res.status(404).json({ error: "not found" });
+  res.json({ apiKey });
 });
 
 apiRouter.delete("/sites/:id", (req, res) => {
@@ -335,7 +338,7 @@ apiRouter.get("/sites/:id", (req, res) => {
     paused: Boolean(site.paused),
     public: Boolean(site.public),
     client: site.client,
-    apiKey: site.api_key,
+    hasAgentKey: Boolean(site.api_key),
     agent: snapshot?.data ?? null,
     agentLastSeen: snapshot?.captured_at ?? null,
     domainDaysLeft: domain?.ssl_days_left ?? null,

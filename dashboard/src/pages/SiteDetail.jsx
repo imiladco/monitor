@@ -21,6 +21,7 @@ export default function SiteDetail() {
   const [checks, setChecks] = useState(null);
   const [events, setEvents] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [revealedKey, setRevealedKey] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [saveError, setSaveError] = useState(null);
@@ -258,22 +259,46 @@ export default function SiteDetail() {
       {!agent && (
         <div className="mt-6 rounded-xl border border-dashed border-border bg-panel/50 p-4 text-sm text-gray-400">
           پلاگین همراه (agent) هنوز به این سایت وصل نشده — بدون اون فقط آپ‌تایم و SSL دیده می‌شه، نه تایم‌لاین
-          تغییرات. کلید API برای نصب:
-          <div className="mt-2 flex items-center gap-2">
-            <code className="break-all rounded bg-panel2 px-2 py-1 text-xs text-gray-300" dir="ltr">
-              {site.apiKey}
-            </code>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(site.apiKey);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              }}
-              className="shrink-0 rounded-md bg-panel2 px-2 py-1 text-xs text-gray-300 hover:bg-border"
-            >
-              {copied ? "کپی شد ✓" : "کپی"}
-            </button>
-          </div>
+          تغییرات.
+          {revealedKey ? (
+            <>
+              <p className="mt-2 text-xs text-good">
+                کلید API — فقط همین یک‌بار نمایش داده می‌شه، همین حالا داخل تنظیمات پلاگین ذخیره‌ش کن:
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <code className="break-all rounded bg-panel2 px-2 py-1 text-xs text-gray-300" dir="ltr">
+                  {revealedKey}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(revealedKey);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  }}
+                  className="shrink-0 rounded-md bg-panel2 px-2 py-1 text-xs text-gray-300 hover:bg-border"
+                >
+                  {copied ? "کپی شد ✓" : "کپی"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="mt-2">
+              <button
+                onClick={async () => {
+                  const { apiKey } = await api.regenerateSiteKey(site.id);
+                  setRevealedKey(apiKey);
+                }}
+                className="rounded-md bg-panel2 px-3 py-1.5 text-xs text-gray-200 hover:bg-border"
+              >
+                {site.hasAgentKey ? "تولید کلید API جدید" : "تولید کلید API"}
+              </button>
+              {site.hasAgentKey && (
+                <p className="mt-1 text-xs text-gray-500">
+                  کلید فقط به‌صورت هش ذخیره می‌شه و قابل بازیابی نیست؛ با تولید کلید جدید، کلید قبلی از کار می‌افته.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
