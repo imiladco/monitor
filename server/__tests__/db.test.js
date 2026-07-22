@@ -28,6 +28,10 @@ const {
   listPortChecks,
   deletePortCheck,
   listAllPortChecks,
+  createCommand,
+  listCommands,
+  claimPendingCommands,
+  completeCommand,
 } = await import("../db.js");
 
 test("createSite + listSites round-trip", () => {
@@ -141,6 +145,28 @@ test("port checks: create, list, delete", () => {
   assert.ok(listAllPortChecks().some((p) => p.id === check.id && p.site_name === "Port Site"));
   deletePortCheck(check.id);
   assert.equal(listPortChecks(site.id).length, 0);
+});
+
+test("commands: queue, claim (moves pending->running, idempotent), and complete", () => {
+  const site = createSite({ name: "Command Site", url: "https://command.example.com", apiKey: "key12" });
+  const cmd = createCommand({ siteId: site.id, type: "update_plugin", params: { slug: "woocommerce" } });
+  assert.equal(cmd.status, "pending");
+  assert.deepEqual(JSON.parse(cmd.params), { slug: "woocommerce" });
+
+  const claimed = claimPendingCommands(site.id);
+  assert.equal(claimed.length, 1);
+  assert.equal(claimed[0].id, cmd.id);
+  assert.equal(claimed[0].status, "running");
+  assert.deepEqual(claimed[0].params, { slug: "woocommerce" });
+
+  // a second poll shouldn't re-claim the same (now-running) command
+  assert.equal(claimPendingCommands(site.id).length, 0);
+
+  completeCommand(cmd.id, "done", "updated to 9.0");
+  const history = listCommands(site.id);
+  assert.equal(history[0].status, "done");
+  assert.equal(history[0].result, "updated to 9.0");
+  assert.ok(history[0].completed_at);
 });
 
 test.after(() => {

@@ -169,7 +169,51 @@ function site_monitor_build_snapshot() {
         'users' => $users_payload,
         'dbSizeMb' => $db_size_mb !== null ? (float) $db_size_mb : null,
         'coreIntegrity' => get_option('site_monitor_core_integrity', null),
+        'updatesAvailable' => site_monitor_get_available_updates(),
     ];
+}
+
+function site_monitor_get_available_updates() {
+    $updates = [];
+
+    $plugin_updates = get_site_transient('update_plugins');
+    if (!empty($plugin_updates->response)) {
+        foreach ($plugin_updates->response as $file => $data) {
+            $updates[] = [
+                'type' => 'plugin',
+                'slug' => $data->slug ?? dirname($file),
+                'name' => $data->slug ?? $file,
+                'currentVersion' => $plugin_updates->checked[$file] ?? null,
+                'newVersion' => $data->new_version ?? null,
+            ];
+        }
+    }
+
+    $theme_updates = get_site_transient('update_themes');
+    if (!empty($theme_updates->response)) {
+        foreach ($theme_updates->response as $slug => $data) {
+            $updates[] = [
+                'type' => 'theme',
+                'slug' => $slug,
+                'name' => $slug,
+                'currentVersion' => wp_get_theme($slug)->get('Version'),
+                'newVersion' => $data['new_version'] ?? null,
+            ];
+        }
+    }
+
+    $core_updates = get_site_transient('update_core');
+    if (!empty($core_updates->updates[0]) && $core_updates->updates[0]->response === 'upgrade') {
+        $updates[] = [
+            'type' => 'core',
+            'slug' => 'core',
+            'name' => 'WordPress',
+            'currentVersion' => get_bloginfo('version'),
+            'newVersion' => $core_updates->updates[0]->current,
+        ];
+    }
+
+    return $updates;
 }
 
 /**
@@ -307,10 +351,136 @@ function site_monitor_track_failed_login($username) {
 add_action('wp_login_failed', 'site_monitor_track_failed_login');
 
 /* -----------------------------------------------------------------------
+ * Remote actions (update plugin/theme/core, clear cache)
+ *
+ * Off by default on the server side (a global toggle in the dashboard) —
+ * this just polls for and executes whatever the server hands it, so the
+ * real safety gate lives centrally, not here.
+ * ---------------------------------------------------------------------*/
+
+add_filter('cron_schedules', function ($schedules) {
+    $schedules['site_monitor_five_minutes'] = ['interval' => 300, 'display' => 'Every 5 minutes'];
+    return $schedules;
+});
+
+if (!wp_next_scheduled('site_monitor_check_commands')) {
+    wp_schedule_event(time(), 'site_monitor_five_minutes', 'site_monitor_check_commands');
+}
+add_action('site_monitor_check_commands', 'site_monitor_run_pending_commands');
+
+function site_monitor_run_pending_commands() {
+    if (!site_monitor_is_configured()) return;
+
+    $response = wp_remote_get(site_monitor_api_url() . '/commands', [
+        'timeout' => 15,
+        'headers' => ['X-Api-Key' => site_monitor_api_key()],
+    ]);
+    if (is_wp_error($response)) return;
+
+    $data = json_decode(wp_remote_retrieve_body($response), true);
+    foreach ($data['commands'] ?? [] as $command) {
+        $result = site_monitor_execute_command($command);
+        wp_remote_post(site_monitor_api_url() . '/commands/' . $command['id'] . '/result', [
+            'timeout' => 15,
+            'headers' => ['Content-Type' => 'application/json', 'X-Api-Key' => site_monitor_api_key()],
+            'body' => wp_json_encode($result),
+        ]);
+    }
+
+    if (!empty($data['commands'])) {
+        site_monitor_send_snapshot(); // refresh state right after making a change
+    }
+}
+
+function site_monitor_execute_command($command) {
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    require_once ABSPATH . 'wp-admin/includes/update.php';
+    if (!function_exists('get_plugins')) require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+    $type = $command['type'];
+    $params = $command['params'] ?? [];
+    $skin = new Automatic_Upgrader_Skin();
+
+    try {
+        switch ($type) {
+            case 'update_plugin':
+                $file = site_monitor_plugin_file_for_slug($params['slug'] ?? '');
+                if (!$file) return ['status' => 'failed', 'result' => 'پلاگین با این slug پیدا نشد'];
+                $ok = (new Plugin_Upgrader($skin))->upgrade($file);
+                return $ok ? ['status' => 'done', 'result' => 'آپدیت شد'] : ['status' => 'failed', 'result' => 'آپدیت ناموفق بود'];
+
+            case 'update_theme':
+                $ok = (new Theme_Upgrader($skin))->upgrade($params['slug'] ?? '');
+                return $ok ? ['status' => 'done', 'result' => 'آپدیت شد'] : ['status' => 'failed', 'result' => 'آپدیت ناموفق بود'];
+
+            case 'update_core':
+                $updates = get_core_updates();
+                if (empty($updates) || $updates[0]->response !== 'upgrade') {
+                    return ['status' => 'failed', 'result' => 'آپدیتی برای هسته موجود نیست'];
+                }
+                $ok = (new Core_Upgrader($skin))->upgrade($updates[0]);
+                return is_wp_error($ok)
+                    ? ['status' => 'failed', 'result' => $ok->get_error_message()]
+                    : ['status' => 'done', 'result' => 'هسته آپدیت شد'];
+
+            case 'clear_cache':
+                return ['status' => 'done', 'result' => site_monitor_clear_cache()];
+
+            default:
+                return ['status' => 'failed', 'result' => 'نوع دستور ناشناخته'];
+        }
+    } catch (Throwable $e) {
+        return ['status' => 'failed', 'result' => $e->getMessage()];
+    }
+}
+
+function site_monitor_plugin_file_for_slug($slug) {
+    foreach (array_keys(get_plugins()) as $file) {
+        if (dirname($file) === $slug || $file === $slug) return $file;
+    }
+    return null;
+}
+
+// Best-effort: fires whichever well-known cache plugin's clear function is
+// present, plus wp_cache_flush() as a baseline. Reports what it fired.
+function site_monitor_clear_cache() {
+    $fired = [];
+
+    if (function_exists('wp_cache_flush')) {
+        wp_cache_flush();
+        $fired[] = 'wp_cache_flush';
+    }
+    if (function_exists('rocket_clean_domain')) {
+        rocket_clean_domain();
+        $fired[] = 'WP Rocket';
+    }
+    if (function_exists('w3tc_flush_all')) {
+        w3tc_flush_all();
+        $fired[] = 'W3 Total Cache';
+    }
+    if (function_exists('wp_cache_clear_cache')) {
+        wp_cache_clear_cache();
+        $fired[] = 'WP Super Cache';
+    }
+    if (has_action('litespeed_purge_all')) {
+        do_action('litespeed_purge_all');
+        $fired[] = 'LiteSpeed Cache';
+    }
+    if (function_exists('sg_cachepress_purge_cache')) {
+        sg_cachepress_purge_cache();
+        $fired[] = 'SiteGround Optimizer';
+    }
+
+    return $fired ? implode('، ', $fired) . ' پاک شد' : 'هیچ کش شناخته‌شده‌ای پیدا نشد';
+}
+
+/* -----------------------------------------------------------------------
  * Cleanup on deactivation
  * ---------------------------------------------------------------------*/
 
 register_deactivation_hook(__FILE__, function () {
     wp_clear_scheduled_hook('site_monitor_hourly_snapshot');
     wp_clear_scheduled_hook('site_monitor_daily_integrity');
+    wp_clear_scheduled_hook('site_monitor_check_commands');
 });

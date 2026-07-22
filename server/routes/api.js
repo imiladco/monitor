@@ -32,6 +32,8 @@ import {
   listPortChecks,
   deletePortCheck,
   downtimeIncidents,
+  createCommand,
+  listCommands,
 } from "../db.js";
 
 export const apiRouter = Router();
@@ -108,6 +110,37 @@ apiRouter.patch("/sites/:id/public", (req, res) => {
   if (!site) return res.status(404).json({ error: "not found" });
   setSitePublic(site.id, Boolean(req.body?.public));
   res.json({ ok: true });
+});
+
+apiRouter.get("/settings/remote-actions", (req, res) => {
+  res.json({ enabled: getSetting("remote_actions_enabled", "0") === "1" });
+});
+
+apiRouter.put("/settings/remote-actions", (req, res) => {
+  setSetting("remote_actions_enabled", req.body?.enabled ? "1" : "0");
+  res.json({ ok: true });
+});
+
+const ALLOWED_COMMAND_TYPES = new Set(["update_plugin", "update_theme", "update_core", "clear_cache"]);
+
+apiRouter.get("/sites/:id/commands", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  res.json(listCommands(site.id));
+});
+
+apiRouter.post("/sites/:id/commands", (req, res) => {
+  if (getSetting("remote_actions_enabled", "0") !== "1") {
+    return res.status(403).json({ error: "اقدامات از راه دور غیرفعاله — از تنظیمات فعالش کن" });
+  }
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+
+  const { type, params } = req.body || {};
+  if (!ALLOWED_COMMAND_TYPES.has(type)) return res.status(400).json({ error: "نوع دستور نامعتبر" });
+
+  const command = createCommand({ siteId: site.id, type, params });
+  res.status(201).json(command);
 });
 
 apiRouter.get("/settings", (req, res) => {

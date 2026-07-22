@@ -88,6 +88,12 @@ export const api = {
   deletePortCheck: (id) => request(`/port-checks/${id}`, { method: "DELETE" }),
   slaReportUrl: (siteId, days) =>
     `/api/sites/${siteId}/sla-report?days=${days}&pw=${encodeURIComponent(getPassword())}`,
+  remoteActionsStatus: () => request("/settings/remote-actions"),
+  setRemoteActionsEnabled: (enabled) =>
+    request("/settings/remote-actions", { method: "PUT", body: JSON.stringify({ enabled }) }),
+  commands: (siteId) => request(`/sites/${siteId}/commands`),
+  createCommand: (siteId, type, params) =>
+    request(`/sites/${siteId}/commands`, { method: "POST", body: JSON.stringify({ type, params }) }),
 };
 
 export async function fetchPublicStatus(token) {

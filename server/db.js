@@ -92,6 +92,21 @@ CREATE TABLE IF NOT EXISTS port_checks (
   port INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Remote actions (update plugin/theme/core, clear cache) executed by the
+-- WP agent. Gated globally off by default via the remote_actions_enabled
+-- setting — see server/routes/agentCommands.js.
+CREATE TABLE IF NOT EXISTS commands (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  params TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  result TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_commands_site_status ON commands(site_id, status);
 `);
 
 // Lightweight migration: add columns that didn't exist in earlier releases
@@ -306,6 +321,37 @@ export function downtimeIncidents(siteId, days) {
   }
   if (open) incidents.push({ ...open, endedAt: null });
   return incidents;
+}
+
+export function createCommand({ siteId, type, params }) {
+  const info = db
+    .prepare("INSERT INTO commands (site_id, type, params) VALUES (?, ?, ?)")
+    .run(siteId, type, params ? JSON.stringify(params) : null);
+  return db.prepare("SELECT * FROM commands WHERE id = ?").get(info.lastInsertRowid);
+}
+
+export function listCommands(siteId, limit = 50) {
+  return db
+    .prepare("SELECT * FROM commands WHERE site_id = ? ORDER BY created_at DESC LIMIT ?")
+    .all(siteId, limit)
+    .map((c) => ({ ...c, params: c.params ? JSON.parse(c.params) : null }));
+}
+
+// Fetches this site's pending commands and atomically marks them "running"
+// so a slow/duplicate agent poll doesn't pick the same command up twice.
+export function claimPendingCommands(siteId) {
+  const pending = db.prepare("SELECT * FROM commands WHERE site_id = ? AND status = 'pending'").all(siteId);
+  const markRunning = db.prepare("UPDATE commands SET status = 'running' WHERE id = ?");
+  for (const c of pending) markRunning.run(c.id);
+  return pending.map((c) => ({ ...c, status: "running", params: c.params ? JSON.parse(c.params) : null }));
+}
+
+export function completeCommand(id, status, result) {
+  db.prepare("UPDATE commands SET status = ?, result = ?, completed_at = datetime('now') WHERE id = ?").run(
+    status,
+    result ?? null,
+    id
+  );
 }
 
 export function lastCheckTimestamp() {

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import TelegramTopics from "../components/TelegramTopics.jsx";
 import TwoFactorSettings from "../components/TwoFactorSettings.jsx";
+import RemoteActionsToggle from "../components/RemoteActionsToggle.jsx";
 
 export default function SettingsPage() {
   const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "", telegramGroupId: "" });
@@ -63,6 +64,7 @@ export default function SettingsPage() {
       <h2 className="mb-6 mt-3 text-lg font-semibold text-gray-100">تنظیمات</h2>
 
       <TwoFactorSettings />
+      <RemoteActionsToggle />
 
       <h3 className="mb-3 mt-8 font-medium text-gray-100">تلگرام</h3>
       <form onSubmit={submit} className="max-w-md space-y-4 rounded-2xl border border-border bg-panel p-6">
