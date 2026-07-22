@@ -10,8 +10,18 @@ import {
   setSessionCookie,
   clearSessionCookie,
 } from "../session.js";
+import { createRateLimiter } from "../rateLimit.js";
 
 export const authRouter = Router();
+
+// Throttle login brute-forcing: at most 10 failed attempts per IP per 15 min.
+// Successful logins don't count, so a legitimate admin isn't locked out.
+const loginLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  message: "تعداد تلاش‌های ناموفق زیاد بود؛ چند دقیقه دیگه دوباره امتحان کن",
+});
 
 // Constant-time password comparison so login timing can't be used to recover
 // the password character by character.
@@ -22,7 +32,7 @@ function passwordMatches(provided) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-authRouter.post("/login", (req, res) => {
+authRouter.post("/login", loginLimiter, (req, res) => {
   if (!env.adminPassword) {
     return res.status(500).json({ error: "ADMIN_PASSWORD is not set on the server" });
   }
