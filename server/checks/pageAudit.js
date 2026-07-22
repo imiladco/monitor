@@ -1,13 +1,23 @@
 import { chromium } from "playwright-core";
+import { isBlockedUrl } from "./urlGuard.js";
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || undefined;
 
 const PROXY_SERVER = process.env.HTTPS_PROXY || process.env.https_proxy;
 
+// The OS-level sandbox is disabled by default because it can't run as root or
+// in an unprivileged container. Set CHROMIUM_DISABLE_SANDBOX=false to re-enable
+// it where the environment supports user namespaces — strongly recommended, as
+// this browser renders untrusted remote pages. The egress guard below is
+// defense-in-depth for the common (no-sandbox) case.
+const DISABLE_SANDBOX = process.env.CHROMIUM_DISABLE_SANDBOX !== "false";
+
 async function getBrowser() {
+  const args = ["--disable-dev-shm-usage", "--disable-gpu", "--disable-extensions", "--no-first-run"];
+  if (DISABLE_SANDBOX) args.push("--no-sandbox", "--disable-setuid-sandbox");
   return chromium.launch({
     executablePath: CHROMIUM_PATH,
-    args: ["--no-sandbox"],
+    args,
     proxy: PROXY_SERVER ? { server: PROXY_SERVER, bypass: "localhost,127.0.0.1" } : undefined,
   });
 }
@@ -21,6 +31,15 @@ export async function auditPage(url) {
   const browser = await getBrowser();
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+
+    // Block the browser from reaching internal/private addresses (SSRF guard).
+    // Applies to the main navigation and every sub-resource/redirect.
+    await page.route("**/*", async (route) => {
+      if (await isBlockedUrl(route.request().url())) {
+        return route.abort("blockedbyclient");
+      }
+      return route.continue();
+    });
 
     await page.addInitScript(() => {
       window.__vitals = { lcp: 0, cls: 0 };
