@@ -16,6 +16,8 @@ jobs:
           cache: "npm"
       - run: npm install
       - run: npm test
+      - run: npm --prefix mcp-server install
+      - run: npm --prefix mcp-server test
 
   build-dashboard:
     runs-on: ubuntu-latest

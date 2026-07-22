@@ -41,7 +41,11 @@ import {
   recentBadVerdicts,
   listSiteHolds,
   releaseHold,
+  createMcpKey,
+  listMcpKeys,
+  deleteMcpKey,
 } from "../db.js";
+import { hashMcpKey } from "../mcpAuth.js";
 import { fleetVulnerabilities, runVulnerabilityScan } from "../vuln/index.js";
 
 export const apiRouter = Router();
@@ -514,6 +518,26 @@ apiRouter.get("/sites/:id/holds", (req, res) => {
 
 apiRouter.post("/holds/:id/release", (req, res) => {
   releaseHold(Number(req.params.id), "admin");
+  res.json({ ok: true });
+});
+
+/* --- MCP access keys (v2 phase C) --- */
+
+apiRouter.get("/settings/mcp-keys", (req, res) => {
+  res.json(listMcpKeys());
+});
+
+apiRouter.post("/settings/mcp-keys", (req, res) => {
+  const name = (req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ error: "name لازمه" });
+  const rawKey = `mcp_${crypto.randomBytes(24).toString("hex")}`;
+  const record = createMcpKey(name, hashMcpKey(rawKey));
+  // raw key returned exactly once — never stored in plaintext
+  res.status(201).json({ ...record, key: rawKey });
+});
+
+apiRouter.delete("/settings/mcp-keys/:id", (req, res) => {
+  deleteMcpKey(Number(req.params.id));
   res.json({ ok: true });
 });
 

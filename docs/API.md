@@ -92,6 +92,16 @@ Agent-facing (own `X-Api-Key` auth):
 - `GET /settings/status-page` / `POST /settings/status-page/regenerate` — public status page token
 - `GET /settings/2fa` / `POST /settings/2fa/setup` / `POST /settings/2fa/confirm` / `POST /settings/2fa/disable`
 - `GET /settings/branding` / `PUT /settings/branding` — `{ name, logoUrl }`, white-label the dashboard/login
+- `GET /settings/mcp-keys` — list MCP keys (name, created/last-used; never the raw key)
+- `POST /settings/mcp-keys` — `{ name }` → returns the raw key **once** (only the SHA-256 hash is stored)
+- `DELETE /settings/mcp-keys/:id` — revoke a key
+
+## MCP read API (`/api/mcp/*`, `Authorization: Bearer <mcp-key>`)
+
+Read-only, for the MCP server (`mcp-server/`). Separate auth from the admin password.
+- `GET /mcp/sites`, `GET /mcp/sites/:id`, `GET /mcp/sites/:id/uptime?days=`, `GET /mcp/sites/:id/timeline`
+- `GET /mcp/incidents?days=&site_id=`, `GET /mcp/fleet-summary`
+- `GET /mcp/search?plugin=|slow_ms=|ssl_within_days=`, `GET /mcp/plugin/:slug`, `GET /mcp/vulnerabilities`
 
 ## Public
 
