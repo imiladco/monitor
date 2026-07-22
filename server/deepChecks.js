@@ -98,7 +98,7 @@ async function runDomainCheck(site) {
 }
 
 export async function runDeepChecks() {
-  for (const site of listSites()) {
+  for (const site of listSites().filter((s) => !s.paused)) {
     try {
       await runVisualAndVitals(site);
     } catch (err) {

@@ -20,9 +20,9 @@ export default function UptimeBar({ checks, height = 36 }) {
         </span>
       </div>
       <div className="mt-1.5 flex gap-[2px]" style={{ height }}>
-        {checks.map((c) => (
+        {checks.map((c, i) => (
           <div
-            key={c.id}
+            key={c.id ?? i}
             title={`${c.ok ? "آنلاین" : "آفلاین"} — ${formatTime(c.checked_at)}${
               c.response_ms != null ? ` — ${c.response_ms}ms` : ""
             }`}

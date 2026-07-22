@@ -7,7 +7,7 @@ const BROWSER_HEADERS = {
   "Accept-Language": "en-US,en;q=0.9,fa;q=0.8",
 };
 
-async function attempt(url) {
+async function attempt(url, { keyword, keywordMode = "present" } = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.requestTimeoutMs);
   const start = Date.now();
@@ -19,13 +19,33 @@ async function attempt(url) {
       signal: controller.signal,
       headers: BROWSER_HEADERS,
     });
+
+    let body = null;
+    if (keyword && res.status < 500) {
+      body = await res.text();
+    }
     const responseMs = Date.now() - start;
+
+    let up = res.status < 500;
+    let error = null;
+    if (up && keyword) {
+      const found = body.includes(keyword);
+      const keywordOk = keywordMode === "absent" ? !found : found;
+      if (!keywordOk) {
+        up = false;
+        error =
+          keywordMode === "absent"
+            ? `کلیدواژه‌ی ممنوعه پیدا شد: "${keyword}"`
+            : `کلیدواژه پیدا نشد: "${keyword}"`;
+      }
+    }
+
     return {
-      up: res.status < 500,
+      up,
       statusCode: res.status,
       responseMs,
       slow: responseMs > env.slowResponseMs,
-      error: null,
+      error,
     };
   } catch (err) {
     return {
@@ -44,10 +64,10 @@ async function attempt(url) {
 // occasionally challenge or rate-limit a single request from a non-browser
 // client. A lone failure is retried once before being reported as down, so
 // a real browser-facing outage is what actually triggers an alert.
-export async function checkUptime(url) {
-  const first = await attempt(url);
+export async function checkUptime(url, options) {
+  const first = await attempt(url, options);
   if (first.up) return first;
 
   await new Promise((r) => setTimeout(r, 3000));
-  return attempt(url);
+  return attempt(url, options);
 }
