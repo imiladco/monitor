@@ -21,7 +21,11 @@ async function checkSiteUptime(site) {
     error: result.error,
   });
 
-  if (prev && Boolean(prev.ok) !== result.up) {
+  // Treat "no prior check" as if it was up, so a site that's already down
+  // the very first time we check it still alerts instead of silently
+  // waiting for a future transition that may never come.
+  const wasUp = prev ? Boolean(prev.ok) : true;
+  if (wasUp !== result.up) {
     const title = result.up
       ? `🟢 برگشت آنلاین (${result.responseMs}ms)`
       : `🔴 از دسترس خارج شد — ${result.error || `HTTP ${result.statusCode}`}`;
@@ -54,7 +58,8 @@ async function checkSiteUptime(site) {
       statusCode: checkoutResult.statusCode,
       error: checkoutResult.error,
     });
-    if (checkoutPrev && Boolean(checkoutPrev.ok) !== checkoutResult.up) {
+    const checkoutWasUp = checkoutPrev ? Boolean(checkoutPrev.ok) : true;
+    if (checkoutWasUp !== checkoutResult.up) {
       const title = checkoutResult.up ? "🟢 صفحه‌ی چک‌اوت دوباره سالمه" : "🔴 صفحه‌ی چک‌اوت خرابه";
       recordEvent(site.id, { type: "checkout_change", title, severity: checkoutResult.up ? "info" : "critical" });
       await sendTelegram(`<b>${site.name}</b> ${title}\n${site.checkout_url}`);

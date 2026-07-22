@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
-import Sparkline from "../components/Sparkline.jsx";
+import UptimeBar from "../components/UptimeBar.jsx";
+import ResponseTimeChart from "../components/ResponseTimeChart.jsx";
 import Timeline from "../components/Timeline.jsx";
 
 export default function SiteDetail() {
@@ -18,7 +19,7 @@ export default function SiteDetail() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [s, c, e] = await Promise.all([api.site(id), api.checks(id, "uptime", 60), api.timeline(id)]);
+      const [s, c, e] = await Promise.all([api.site(id), api.checks(id, "uptime", 120), api.timeline(id)]);
       if (cancelled) return;
       setSite(s);
       setChecks(c);
@@ -81,9 +82,6 @@ export default function SiteDetail() {
           <button onClick={remove} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-bad hover:bg-border">
             حذف
           </button>
-          <div dir="ltr">
-            <Sparkline points={checks || []} ok={lastCheck?.ok} width={220} height={48} />
-          </div>
         </div>
       </div>
 
@@ -126,6 +124,15 @@ export default function SiteDetail() {
           </div>
         </form>
       )}
+
+      <div className="mt-6 rounded-xl border border-border bg-panel p-4">
+        <UptimeBar checks={checks || []} />
+      </div>
+
+      <div className="mt-4 rounded-xl border border-border bg-panel p-4">
+        <div className="mb-1 text-xs text-gray-500">سرعت پاسخ</div>
+        <ResponseTimeChart points={checks || []} />
+      </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="وضعیت" value={lastCheck ? (lastCheck.ok ? "آنلاین" : "آفلاین") : "-"} />

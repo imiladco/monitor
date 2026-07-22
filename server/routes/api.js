@@ -1,6 +1,7 @@
 import { Router } from "express";
 import fs from "node:fs";
 import crypto from "node:crypto";
+import { sendTelegram } from "../notify/telegram.js";
 import {
   listSites,
   getSiteById,
@@ -31,6 +32,7 @@ apiRouter.get("/sites", (req, res) => {
       responseMs: uptime?.response_ms ?? null,
       sslDaysLeft: ssl?.ssl_days_left ?? null,
       lastCheckedAt: uptime?.checked_at ?? null,
+      recentChecks: checkHistory(site.id, "uptime", 30).reverse(),
     };
   });
   res.json(sites);
@@ -86,6 +88,11 @@ apiRouter.put("/settings", (req, res) => {
     setSetting("telegram_chat_id", telegramChatId);
   }
   res.json({ ok: true });
+});
+
+apiRouter.post("/settings/test-telegram", async (req, res) => {
+  const result = await sendTelegram("🔔 پیام تست از Site Monitor — اتصال تلگرام درست کار می‌کنه.");
+  res.json(result);
 });
 
 apiRouter.get("/sites/:id", (req, res) => {
