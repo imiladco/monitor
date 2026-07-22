@@ -73,6 +73,25 @@ CREATE TABLE IF NOT EXISTS snapshots (
   captured_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_snapshots_site_time ON snapshots(site_id, captured_at);
+
+CREATE TABLE IF NOT EXISTS maintenance_windows (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER REFERENCES sites(id) ON DELETE CASCADE,
+  note TEXT,
+  starts_at TEXT NOT NULL,
+  ends_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_maintenance_site_time ON maintenance_windows(site_id, starts_at, ends_at);
+
+CREATE TABLE IF NOT EXISTS port_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  host TEXT NOT NULL,
+  port INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // Lightweight migration: add columns that didn't exist in earlier releases
@@ -267,7 +286,85 @@ export function saveSnapshot(siteId, data) {
   db.prepare("INSERT INTO snapshots (site_id, data) VALUES (?, ?)").run(siteId, JSON.stringify(data));
 }
 
+export function downtimeIncidents(siteId, days) {
+  const rows = db
+    .prepare(
+      `SELECT * FROM events WHERE site_id = ? AND type = 'uptime_change' AND occurred_at >= datetime('now', ?) ORDER BY occurred_at ASC`
+    )
+    .all(siteId, `-${days} days`);
+
+  const incidents = [];
+  let open = null;
+  for (const row of rows) {
+    const isDown = row.severity === "critical";
+    if (isDown && !open) {
+      open = { startedAt: row.occurred_at, reason: row.title };
+    } else if (!isDown && open) {
+      incidents.push({ ...open, endedAt: row.occurred_at });
+      open = null;
+    }
+  }
+  if (open) incidents.push({ ...open, endedAt: null });
+  return incidents;
+}
+
 export function lastCheckTimestamp() {
   const row = db.prepare("SELECT MAX(checked_at) AS t FROM checks").get();
   return row?.t ?? null;
+}
+
+export function createMaintenanceWindow({ siteId, note, startsAt, endsAt }) {
+  const info = db
+    .prepare("INSERT INTO maintenance_windows (site_id, note, starts_at, ends_at) VALUES (?, ?, ?, ?)")
+    .run(siteId ?? null, note || null, startsAt, endsAt);
+  return db.prepare("SELECT * FROM maintenance_windows WHERE id = ?").get(info.lastInsertRowid);
+}
+
+export function listMaintenanceWindows(siteId) {
+  if (siteId) {
+    return db
+      .prepare("SELECT * FROM maintenance_windows WHERE site_id = ? OR site_id IS NULL ORDER BY starts_at DESC")
+      .all(siteId);
+  }
+  return db.prepare("SELECT * FROM maintenance_windows ORDER BY starts_at DESC").all();
+}
+
+export function deleteMaintenanceWindow(id) {
+  db.prepare("DELETE FROM maintenance_windows WHERE id = ?").run(id);
+}
+
+export function isInMaintenanceWindow(siteId) {
+  const row = db
+    .prepare(
+      `SELECT 1 FROM maintenance_windows
+       WHERE (site_id = ? OR site_id IS NULL)
+         AND datetime('now') BETWEEN starts_at AND ends_at
+       LIMIT 1`
+    )
+    .get(siteId);
+  return Boolean(row);
+}
+
+export function createPortCheck({ siteId, label, host, port }) {
+  const info = db
+    .prepare("INSERT INTO port_checks (site_id, label, host, port) VALUES (?, ?, ?, ?)")
+    .run(siteId, label, host, port);
+  return db.prepare("SELECT * FROM port_checks WHERE id = ?").get(info.lastInsertRowid);
+}
+
+export function listPortChecks(siteId) {
+  return db.prepare("SELECT * FROM port_checks WHERE site_id = ? ORDER BY id").all(siteId);
+}
+
+export function deletePortCheck(id) {
+  db.prepare("DELETE FROM port_checks WHERE id = ?").run(id);
+}
+
+export function listAllPortChecks() {
+  return db
+    .prepare(
+      `SELECT port_checks.*, sites.name AS site_name, sites.paused AS site_paused
+       FROM port_checks JOIN sites ON sites.id = port_checks.site_id`
+    )
+    .all();
 }

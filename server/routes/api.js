@@ -24,6 +24,14 @@ import {
   setSetting,
   listTelegramTopics,
   setTelegramTopic,
+  createMaintenanceWindow,
+  listMaintenanceWindows,
+  deleteMaintenanceWindow,
+  isInMaintenanceWindow,
+  createPortCheck,
+  listPortChecks,
+  deletePortCheck,
+  downtimeIncidents,
 } from "../db.js";
 
 export const apiRouter = Router();
@@ -272,6 +280,7 @@ apiRouter.get("/sites/:id", (req, res) => {
     uptime7d: uptimePercent(site.id, 7),
     uptime30d: uptimePercent(site.id, 30),
     uptime90d: uptimePercent(site.id, 90),
+    inMaintenance: isInMaintenanceWindow(site.id),
     screenshot: screenshot
       ? {
           capturedAt: screenshot.captured_at,
@@ -304,6 +313,81 @@ apiRouter.get("/sites/:id/timeline", (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 200, 500);
   res.json(eventTimeline(req.params.id, limit));
 });
+
+// site_id = null means "applies to all sites"
+apiRouter.get("/sites/:id/maintenance-windows", (req, res) => {
+  res.json(listMaintenanceWindows(Number(req.params.id)));
+});
+
+apiRouter.post("/maintenance-windows", (req, res) => {
+  const { siteId, note, startsAt, endsAt } = req.body || {};
+  if (!startsAt || !endsAt) return res.status(400).json({ error: "startsAt and endsAt are required" });
+  if (new Date(endsAt) <= new Date(startsAt)) return res.status(400).json({ error: "endsAt must be after startsAt" });
+  const window = createMaintenanceWindow({ siteId: siteId || null, note, startsAt, endsAt });
+  res.status(201).json(window);
+});
+
+apiRouter.delete("/maintenance-windows/:id", (req, res) => {
+  deleteMaintenanceWindow(req.params.id);
+  res.json({ ok: true });
+});
+
+apiRouter.get("/sites/:id/port-checks", (req, res) => {
+  const checks = listPortChecks(req.params.id).map((pc) => {
+    const check = latestCheck(pc.site_id, `port:${pc.id}`);
+    return { ...pc, up: check ? Boolean(check.ok) : null, lastCheckedAt: check?.checked_at ?? null };
+  });
+  res.json(checks);
+});
+
+apiRouter.post("/sites/:id/port-checks", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  const { label, host, port } = req.body || {};
+  const portNum = Number(port);
+  if (!label || !host || !Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+    return res.status(400).json({ error: "label, host, and a valid port (1-65535) are required" });
+  }
+  const check = createPortCheck({ siteId: site.id, label, host, port: portNum });
+  res.status(201).json(check);
+});
+
+apiRouter.delete("/port-checks/:id", (req, res) => {
+  deletePortCheck(req.params.id);
+  res.json({ ok: true });
+});
+
+apiRouter.get("/sites/:id/sla-report", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  const days = Math.min(Number(req.query.days) || 30, 365);
+  const incidents = downtimeIncidents(site.id, days);
+  const uptime = uptimePercent(site.id, days);
+
+  const rows = [
+    ["site", site.name],
+    ["period_days", days],
+    ["uptime_percent", uptime ?? ""],
+    [],
+    ["started_at", "ended_at", "duration_minutes", "reason"],
+    ...incidents.map((i) => {
+      const durationMin = i.endedAt
+        ? Math.round((new Date(`${i.endedAt}Z`) - new Date(`${i.startedAt}Z`)) / 60000)
+        : "";
+      return [i.startedAt, i.endedAt || "در حال وقوع", durationMin, i.reason];
+    }),
+  ];
+  const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${site.name}-sla-${days}d.csv"`);
+  res.send("﻿" + csv); // BOM so Excel opens UTF-8/Persian text correctly
+});
+
+function csvEscape(value) {
+  const str = String(value ?? "");
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
 
 function ensureStatusPageToken() {
   let token = getSetting("status_page_token", "");

@@ -4,6 +4,8 @@ import { api } from "../api.js";
 import UptimeBar from "../components/UptimeBar.jsx";
 import ResponseTimeChart from "../components/ResponseTimeChart.jsx";
 import Timeline from "../components/Timeline.jsx";
+import MaintenanceWindows from "../components/MaintenanceWindows.jsx";
+import PortChecks from "../components/PortChecks.jsx";
 
 export default function SiteDetail() {
   const { id } = useParams();
@@ -82,6 +84,9 @@ export default function SiteDetail() {
         <div className="flex flex-wrap items-center gap-2">
           {site.paused && (
             <span className="rounded-lg bg-warn/20 px-2 py-1 text-xs text-warn">⏸ مکث شده</span>
+          )}
+          {site.inMaintenance && (
+            <span className="rounded-lg bg-accent/20 px-2 py-1 text-xs text-accent">🔧 در حال تعمیرات</span>
           )}
           <button onClick={togglePublic} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border">
             {site.public ? "✓ نمایش عمومی" : "نمایش عمومی خاموشه"}
@@ -194,6 +199,18 @@ export default function SiteDetail() {
           value={site.screenshot?.diffPercent != null ? `${site.screenshot.diffPercent.toFixed(1)}٪` : "-"}
         />
       </div>
+
+      <div className="mt-4 flex gap-2">
+        <a href={api.slaReportUrl(site.id, 30)} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border">
+          دانلود گزارش SLA (۳۰ روز، CSV)
+        </a>
+        <a href={api.slaReportUrl(site.id, 90)} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border">
+          ۹۰ روز
+        </a>
+      </div>
+
+      <MaintenanceWindows siteId={site.id} />
+      <PortChecks siteId={site.id} />
 
       {site.screenshot && (
         <div className="mt-6 overflow-hidden rounded-xl border border-border bg-panel">

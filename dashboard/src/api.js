@@ -79,6 +79,15 @@ export const api = {
   twoFactorSetup: () => request("/settings/2fa/setup", { method: "POST" }),
   twoFactorConfirm: (code) => request("/settings/2fa/confirm", { method: "POST", body: JSON.stringify({ code }) }),
   twoFactorDisable: (code) => request("/settings/2fa/disable", { method: "POST", body: JSON.stringify({ code }) }),
+  maintenanceWindows: (siteId) => request(`/sites/${siteId}/maintenance-windows`),
+  createMaintenanceWindow: (data) => request("/maintenance-windows", { method: "POST", body: JSON.stringify(data) }),
+  deleteMaintenanceWindow: (id) => request(`/maintenance-windows/${id}`, { method: "DELETE" }),
+  portChecks: (siteId) => request(`/sites/${siteId}/port-checks`),
+  createPortCheck: (siteId, data) =>
+    request(`/sites/${siteId}/port-checks`, { method: "POST", body: JSON.stringify(data) }),
+  deletePortCheck: (id) => request(`/port-checks/${id}`, { method: "DELETE" }),
+  slaReportUrl: (siteId, days) =>
+    `/api/sites/${siteId}/sla-report?days=${days}&pw=${encodeURIComponent(getPassword())}`,
 };
 
 export async function fetchPublicStatus(token) {

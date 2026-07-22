@@ -24,6 +24,7 @@ const typeIcon = {
   visual_change: "🖼️",
   cwv_drop: "🐌",
   domain_warning: "🌐",
+  port_change: "🔌",
 };
 
 function formatTime(iso) {

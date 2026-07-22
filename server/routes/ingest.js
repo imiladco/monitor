@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getSiteByApiKey, latestSnapshot, saveSnapshot, recordEvent } from "../db.js";
 import { diffSnapshot } from "../diff.js";
-import { sendTelegram } from "../notify/telegram.js";
+import { notifySite } from "../notify/telegram.js";
 import { categoryForEventType } from "../telegramCategories.js";
 
 export const ingestRouter = Router();
@@ -25,7 +25,7 @@ ingestRouter.post("/ingest", async (req, res) => {
   for (const event of events) {
     recordEvent(site.id, { ...event, source: "agent" });
     if (event.severity === "critical" || event.severity === "warning") {
-      await sendTelegram(`⏱ <b>${site.name}</b> — ${event.title}`, categoryForEventType(event.type));
+      await notifySite(site.id, `⏱ <b>${site.name}</b> — ${event.title}`, categoryForEventType(event.type));
     }
   }
 
@@ -46,7 +46,7 @@ ingestRouter.post("/ingest/event", async (req, res) => {
 
   recordEvent(site.id, { type, title, detail, severity, source: "agent" });
   if (severity === "critical" || severity === "warning") {
-    await sendTelegram(`🛡 <b>${site.name}</b> — ${title}`, categoryForEventType(type));
+    await notifySite(site.id, `🛡 <b>${site.name}</b> — ${title}`, categoryForEventType(type));
   }
 
   res.json({ ok: true });
