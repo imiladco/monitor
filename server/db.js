@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_site_time ON events(site_id, occurred_at);
 
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
@@ -82,6 +87,38 @@ export function upsertSite({ name, url, checkoutUrl, apiKey }) {
 
 export function listSites() {
   return db.prepare("SELECT * FROM sites ORDER BY name").all();
+}
+
+export function createSite({ name, url, checkoutUrl, apiKey }) {
+  const info = db
+    .prepare("INSERT INTO sites (name, url, checkout_url, api_key) VALUES (?, ?, ?, ?)")
+    .run(name, url, checkoutUrl || null, apiKey);
+  return db.prepare("SELECT * FROM sites WHERE id = ?").get(info.lastInsertRowid);
+}
+
+export function updateSite(id, { name, url, checkoutUrl }) {
+  db.prepare("UPDATE sites SET name = ?, url = ?, checkout_url = ? WHERE id = ?").run(
+    name,
+    url,
+    checkoutUrl || null,
+    id
+  );
+  return db.prepare("SELECT * FROM sites WHERE id = ?").get(id);
+}
+
+export function deleteSite(id) {
+  db.prepare("DELETE FROM sites WHERE id = ?").run(id);
+}
+
+export function getSetting(key, fallback = null) {
+  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
+  return row ? row.value : fallback;
+}
+
+export function setSetting(key, value) {
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  ).run(key, value);
 }
 
 export function getSiteByApiKey(apiKey) {
