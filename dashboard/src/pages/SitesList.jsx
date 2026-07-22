@@ -3,7 +3,7 @@ import { api } from "../api.js";
 import SiteCard from "../components/SiteCard.jsx";
 
 function AddSiteForm({ onAdded, onCancel }) {
-  const [form, setForm] = useState({ name: "", url: "", checkoutUrl: "" });
+  const [form, setForm] = useState({ name: "", url: "", checkoutUrl: "", client: "" });
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -23,7 +23,7 @@ function AddSiteForm({ onAdded, onCancel }) {
 
   return (
     <form onSubmit={submit} className="mb-6 rounded-2xl border border-border bg-panel p-5">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-4">
         <input
           required
           value={form.name}
@@ -44,6 +44,12 @@ function AddSiteForm({ onAdded, onCancel }) {
           value={form.checkoutUrl}
           onChange={(e) => setForm({ ...form, checkoutUrl: e.target.value })}
           placeholder="آدرس چک‌اوت (اختیاری)"
+          className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
+        />
+        <input
+          value={form.client}
+          onChange={(e) => setForm({ ...form, client: e.target.value })}
+          placeholder="مشتری/پروژه (اختیاری)"
           className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
         />
       </div>
@@ -72,6 +78,7 @@ export default function SitesList() {
   const [sites, setSites] = useState(null);
   const [error, setError] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [clientFilter, setClientFilter] = useState("all");
 
   async function load() {
     try {
@@ -92,15 +99,41 @@ export default function SitesList() {
   if (!sites) return <div className="text-gray-500">در حال بارگذاری…</div>;
 
   const upCount = sites.filter((s) => s.up).length;
+  const clients = [...new Set(sites.map((s) => s.client).filter(Boolean))].sort();
+  const visibleSites = clientFilter === "all" ? sites : sites.filter((s) => s.client === clientFilter);
+  const groups =
+    clientFilter !== "all"
+      ? [[clientFilter, visibleSites]]
+      : Object.entries(
+          visibleSites.reduce((acc, s) => {
+            const key = s.client || "بدون گروه";
+            (acc[key] ||= []).push(s);
+            return acc;
+          }, {})
+        ).sort(([a], [b]) => (a === "بدون گروه" ? 1 : b === "بدون گروه" ? -1 : a.localeCompare(b)));
 
   return (
     <div>
-      <div className="mb-6 flex items-baseline justify-between">
+      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-100">سایت‌ها</h2>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500">
             {upCount} از {sites.length} آنلاین
           </span>
+          {clients.length > 0 && (
+            <select
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              className="rounded-lg border border-border bg-panel2 px-2 py-1 text-sm text-gray-300 outline-none"
+            >
+              <option value="all">همه‌ی مشتری‌ها</option>
+              {clients.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          )}
           {!showAdd && (
             <button
               onClick={() => setShowAdd(true)}
@@ -127,9 +160,20 @@ export default function SitesList() {
           هنوز سایتی اضافه نکردی — از دکمه‌ی «+ سایت جدید» شروع کن.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sites.map((site) => (
-            <SiteCard key={site.id} site={site} />
+        <div className="space-y-8">
+          {groups.map(([groupName, groupSites]) => (
+            <div key={groupName}>
+              {clients.length > 0 && (
+                <h3 className="mb-3 text-sm font-medium text-gray-400">
+                  {groupName} <span className="text-gray-600">({groupSites.length})</span>
+                </h3>
+              )}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {groupSites.map((site) => (
+                  <SiteCard key={site.id} site={site} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

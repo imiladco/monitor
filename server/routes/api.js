@@ -53,13 +53,14 @@ apiRouter.get("/sites", (req, res) => {
       recentChecks: checkHistory(site.id, "uptime", 30).reverse(),
       paused: Boolean(site.paused),
       public: Boolean(site.public),
+      client: site.client,
     };
   });
   res.json(sites);
 });
 
 apiRouter.post("/sites", (req, res) => {
-  const { name, url, checkoutUrl, keyword, keywordMode } = req.body || {};
+  const { name, url, checkoutUrl, keyword, keywordMode, client } = req.body || {};
   if (!name || !url) return res.status(400).json({ error: "name and url are required" });
   try {
     new URL(url);
@@ -72,6 +73,7 @@ apiRouter.post("/sites", (req, res) => {
     checkoutUrl,
     keyword,
     keywordMode,
+    client,
     apiKey: crypto.randomBytes(24).toString("hex"),
   });
   res.status(201).json({ id: site.id });
@@ -80,14 +82,14 @@ apiRouter.post("/sites", (req, res) => {
 apiRouter.put("/sites/:id", (req, res) => {
   const site = getSiteById(req.params.id);
   if (!site) return res.status(404).json({ error: "not found" });
-  const { name, url, checkoutUrl, keyword, keywordMode } = req.body || {};
+  const { name, url, checkoutUrl, keyword, keywordMode, client } = req.body || {};
   if (!name || !url) return res.status(400).json({ error: "name and url are required" });
   try {
     new URL(url);
   } catch {
     return res.status(400).json({ error: "invalid url" });
   }
-  updateSite(site.id, { name, url, checkoutUrl, keyword, keywordMode });
+  updateSite(site.id, { name, url, checkoutUrl, keyword, keywordMode, client });
   res.json({ ok: true });
 });
 
@@ -163,6 +165,20 @@ apiRouter.put("/settings", (req, res) => {
   if (typeof telegramGroupId === "string") {
     setSetting("telegram_group_id", telegramGroupId);
   }
+  res.json({ ok: true });
+});
+
+apiRouter.get("/settings/branding", (req, res) => {
+  res.json({
+    name: getSetting("brand_name", ""),
+    logoUrl: getSetting("brand_logo_url", ""),
+  });
+});
+
+apiRouter.put("/settings/branding", (req, res) => {
+  const { name, logoUrl } = req.body || {};
+  if (typeof name === "string") setSetting("brand_name", name);
+  if (typeof logoUrl === "string") setSetting("brand_logo_url", logoUrl);
   res.json({ ok: true });
 });
 
@@ -306,6 +322,7 @@ apiRouter.get("/sites/:id", (req, res) => {
     keywordMode: site.keyword_mode,
     paused: Boolean(site.paused),
     public: Boolean(site.public),
+    client: site.client,
     apiKey: site.api_key,
     agent: snapshot?.data ?? null,
     agentLastSeen: snapshot?.captured_at ?? null,

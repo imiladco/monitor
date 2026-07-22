@@ -117,6 +117,7 @@ const siteColumnsToAdd = {
   keyword: "TEXT",
   keyword_mode: "TEXT NOT NULL DEFAULT 'present'",
   public: "INTEGER NOT NULL DEFAULT 0",
+  client: "TEXT",
 };
 for (const [column, definition] of Object.entries(siteColumnsToAdd)) {
   if (!existingSiteColumns.has(column)) {
@@ -144,20 +145,27 @@ export function listSites() {
   return db.prepare("SELECT * FROM sites ORDER BY name").all();
 }
 
-export function createSite({ name, url, checkoutUrl, apiKey, keyword, keywordMode }) {
+export function createSite({ name, url, checkoutUrl, apiKey, keyword, keywordMode, client }) {
   const info = db
     .prepare(
-      "INSERT INTO sites (name, url, checkout_url, api_key, keyword, keyword_mode) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO sites (name, url, checkout_url, api_key, keyword, keyword_mode, client) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
-    .run(name, url, checkoutUrl || null, apiKey, keyword || null, keywordMode || "present");
+    .run(name, url, checkoutUrl || null, apiKey, keyword || null, keywordMode || "present", client || null);
   return db.prepare("SELECT * FROM sites WHERE id = ?").get(info.lastInsertRowid);
 }
 
-export function updateSite(id, { name, url, checkoutUrl, keyword, keywordMode }) {
+export function updateSite(id, { name, url, checkoutUrl, keyword, keywordMode, client }) {
   db.prepare(
-    "UPDATE sites SET name = ?, url = ?, checkout_url = ?, keyword = ?, keyword_mode = ? WHERE id = ?"
-  ).run(name, url, checkoutUrl || null, keyword || null, keywordMode || "present", id);
+    "UPDATE sites SET name = ?, url = ?, checkout_url = ?, keyword = ?, keyword_mode = ?, client = ? WHERE id = ?"
+  ).run(name, url, checkoutUrl || null, keyword || null, keywordMode || "present", client || null, id);
   return db.prepare("SELECT * FROM sites WHERE id = ?").get(id);
+}
+
+export function listClients() {
+  return db
+    .prepare("SELECT DISTINCT client FROM sites WHERE client IS NOT NULL AND client != '' ORDER BY client")
+    .all()
+    .map((r) => r.client);
 }
 
 export function deleteSite(id) {

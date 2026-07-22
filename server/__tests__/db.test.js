@@ -32,6 +32,7 @@ const {
   listCommands,
   claimPendingCommands,
   completeCommand,
+  listClients,
 } = await import("../db.js");
 
 test("createSite + listSites round-trip", () => {
@@ -167,6 +168,24 @@ test("commands: queue, claim (moves pending->running, idempotent), and complete"
   assert.equal(history[0].status, "done");
   assert.equal(history[0].result, "updated to 9.0");
   assert.ok(history[0].completed_at);
+});
+
+test("listClients returns distinct, sorted, non-empty client names", () => {
+  createSite({ name: "Client Site 1", url: "https://c1.example.com", apiKey: "key13", client: "Acme" });
+  createSite({ name: "Client Site 2", url: "https://c2.example.com", apiKey: "key14", client: "Acme" });
+  createSite({ name: "Client Site 3", url: "https://c3.example.com", apiKey: "key15", client: "Beta Co" });
+  createSite({ name: "No Client Site", url: "https://c4.example.com", apiKey: "key16" });
+
+  assert.deepEqual(listClients(), ["Acme", "Beta Co"]);
+});
+
+test("updateSite can set and clear the client field", () => {
+  const site = createSite({ name: "Reassignable", url: "https://reassign.example.com", apiKey: "key17" });
+  updateSite(site.id, { name: "Reassignable", url: "https://reassign.example.com", client: "Gamma" });
+  assert.equal(listSites().find((s) => s.id === site.id).client, "Gamma");
+
+  updateSite(site.id, { name: "Reassignable", url: "https://reassign.example.com", client: "" });
+  assert.equal(listSites().find((s) => s.id === site.id).client, null);
 });
 
 test.after(() => {
