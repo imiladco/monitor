@@ -56,6 +56,7 @@ export const api = {
   timeline: (id, limit = 200) => request(`/sites/${id}/timeline?limit=${limit}`),
   settings: () => request("/settings"),
   updateSettings: (data) => request("/settings", { method: "PUT", body: JSON.stringify(data) }),
+  testTelegram: () => request("/settings/test-telegram", { method: "POST" }),
   screenshotUrl: (id, capturedAt) =>
     `/api/sites/${id}/screenshot?t=${encodeURIComponent(capturedAt)}&pw=${encodeURIComponent(getPassword())}`,
 };

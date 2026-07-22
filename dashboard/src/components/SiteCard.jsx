@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import UptimeBar from "./UptimeBar.jsx";
 
 function StatusDot({ up }) {
   const color = up === null ? "bg-gray-500" : up ? "bg-good" : "bg-bad";
@@ -45,6 +46,12 @@ export default function SiteCard({ site }) {
           </div>
         </div>
       </div>
+
+      {site.recentChecks?.length > 1 && (
+        <div className="mt-3">
+          <UptimeBar checks={site.recentChecks} height={20} />
+        </div>
+      )}
     </Link>
   );
 }

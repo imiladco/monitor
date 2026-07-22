@@ -6,6 +6,8 @@ export default function SettingsPage() {
   const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "" });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   useEffect(() => {
     api.settings().then((s) => {
@@ -19,6 +21,19 @@ export default function SettingsPage() {
     await api.updateSettings(form);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function testTelegram() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await api.testTelegram();
+      setTestResult(result);
+    } catch (err) {
+      setTestResult({ ok: false, error: err.message });
+    } finally {
+      setTesting(false);
+    }
   }
 
   if (loading) return <div className="text-gray-500">در حال بارگذاری…</div>;
@@ -56,6 +71,21 @@ export default function SettingsPage() {
         </button>
         {saved && <span className="mr-3 text-sm text-good">ذخیره شد ✓</span>}
       </form>
+
+      <div className="mt-4 max-w-md rounded-2xl border border-border bg-panel p-6">
+        <button
+          onClick={testTelegram}
+          disabled={testing}
+          className="rounded-lg bg-panel2 px-4 py-2 text-sm text-gray-300 hover:bg-border disabled:opacity-50"
+        >
+          {testing ? "در حال ارسال…" : "ارسال پیام تست"}
+        </button>
+        {testResult && (
+          <p className={`mt-3 text-sm ${testResult.ok ? "text-good" : "text-bad"}`}>
+            {testResult.ok ? "✅ پیام تست ارسال شد — چک کن توی تلگرام رسیده باشه" : `❌ ${testResult.error}`}
+          </p>
+        )}
+      </div>
 
       <p className="mt-4 max-w-md text-xs text-gray-500">
         با <a className="text-accent" href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a> یه
