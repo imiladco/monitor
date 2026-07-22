@@ -1,8 +1,8 @@
-export default {
+module.exports = {
   apps: [
     {
       name: "wp-site-monitor",
-      script: "src/index.js",
+      script: "server/index.js",
       autorestart: true,
       watch: false,
     },
