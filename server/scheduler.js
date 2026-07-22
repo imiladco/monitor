@@ -8,6 +8,7 @@ import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks } f
 import { runDeepChecks } from "./deepChecks.js";
 import { backupDatabase } from "./backup.js";
 import { runVulnerabilityScan } from "./vuln/index.js";
+import { evaluatePendingVerdicts } from "./fleet/index.js";
 import { pruneOldLogs } from "./logger.js";
 import { logger } from "./logger.js";
 
@@ -160,6 +161,9 @@ export function startScheduler() {
   });
   cron.schedule(`0 ${env.vulnSyncHour} * * *`, () =>
     runVulnerabilityScan().catch((err) => logger.error("vuln: scan failed", { error: err.message }))
+  );
+  cron.schedule("*/5 * * * *", () =>
+    evaluatePendingVerdicts().catch((err) => logger.error("fleet: evaluation failed", { error: err.message }))
   );
   logger.info("scheduler: started", {
     checkIntervalMinutes: env.checkIntervalMinutes,

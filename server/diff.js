@@ -46,6 +46,7 @@ export function diffSnapshot(prev, next) {
         type: "plugin_update",
         title: `افزونه‌ی ${plugin.name} از ${before.version} به ${plugin.version} آپدیت شد`,
         severity: "info",
+        detail: { slug, fromVersion: before.version, toVersion: plugin.version },
       });
     }
     if (before.active !== plugin.active) {

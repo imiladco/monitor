@@ -476,6 +476,71 @@ function site_monitor_clear_cache() {
 }
 
 /* -----------------------------------------------------------------------
+ * Fleet Learning — Update Guard (v2 phase B, agent side)
+ *
+ * Before an admin updates a plugin, ask the monitor whether this exact
+ * upgrade path has been flagged bad on another site in the fleet. If so,
+ * show a banner in the Plugins / Updates screens. Read-only — this never
+ * blocks the update mechanically, only warns; the admin can still proceed.
+ * ---------------------------------------------------------------------*/
+
+function site_monitor_check_update_hold($slug, $from, $to) {
+    if (!site_monitor_is_configured()) return null;
+
+    // cached briefly so we don't hammer the monitor on every admin page load
+    $cache_key = 'site_monitor_hold_' . md5("$slug|$from|$to");
+    $cached = get_transient($cache_key);
+    if ($cached !== false) return $cached === 'none' ? null : $cached;
+
+    $url = add_query_arg(
+        ['plugin' => $slug, 'from' => $from, 'to' => $to],
+        site_monitor_api_url_base() . '/update-check'
+    );
+    $response = wp_remote_get($url, [
+        'timeout' => 8,
+        'headers' => ['X-Api-Key' => site_monitor_api_key()],
+    ]);
+    if (is_wp_error($response)) return null;
+
+    $data = json_decode(wp_remote_retrieve_body($response), true);
+    $result = (!empty($data['hold'])) ? $data : null;
+    set_transient($cache_key, $result ?: 'none', 10 * MINUTE_IN_SECONDS);
+    return $result;
+}
+
+// The configured API URL ends in /ingest; the guard endpoint is a sibling.
+function site_monitor_api_url_base() {
+    return preg_replace('#/ingest$#', '', site_monitor_api_url());
+}
+
+add_action('admin_notices', function () {
+    if (!current_user_can('update_plugins') || !site_monitor_is_configured()) return;
+
+    if (!function_exists('get_plugin_updates')) {
+        require_once ABSPATH . 'wp-admin/includes/update.php';
+    }
+    $updates = get_plugin_updates();
+    if (empty($updates)) return;
+
+    foreach ($updates as $file => $data) {
+        $slug = dirname($file) !== '.' ? dirname($file) : $file;
+        $from = $data->Version ?? null;
+        $to = $data->update->new_version ?? null;
+        if (!$from || !$to) continue;
+
+        $hold = site_monitor_check_update_hold($slug, $from, $to);
+        if ($hold) {
+            printf(
+                '<div class="notice notice-warning"><p><strong>Site Monitor:</strong> آپدیت «%s» به نسخه‌ی %s توسط Fleet Learning موقتاً hold شده — %s</p></div>',
+                esc_html($data->Name),
+                esc_html($to),
+                esc_html($hold['reason'] ?? 'روی یک سایت دیگر مشکل ایجاد کرده')
+            );
+        }
+    }
+});
+
+/* -----------------------------------------------------------------------
  * Cleanup on deactivation
  * ---------------------------------------------------------------------*/
 

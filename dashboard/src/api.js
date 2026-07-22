@@ -107,6 +107,9 @@ export const api = {
   resolveSiteVulnerability: (siteId, vulnId) =>
     request(`/sites/${siteId}/vulnerabilities/${vulnId}/resolve`, { method: "POST" }),
   rescanVulnerabilities: () => request("/vulnerabilities/scan", { method: "POST" }),
+  fleetAlerts: () => request("/fleet-alerts"),
+  siteHolds: (siteId) => request(`/sites/${siteId}/holds`),
+  releaseHold: (id) => request(`/holds/${id}/release`, { method: "POST" }),
 };
 
 export async function fetchPublicStatus(token) {
