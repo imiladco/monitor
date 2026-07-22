@@ -11,7 +11,7 @@ import { publicStatusRouter } from "./routes/publicStatus.js";
 import { agentCommandsRouter } from "./routes/agentCommands.js";
 import { requireAdmin } from "./auth.js";
 import { runChecks, startScheduler } from "./scheduler.js";
-import { listSites, lastCheckTimestamp } from "./db.js";
+import { listSites, lastCheckTimestamp, getSetting } from "./db.js";
 import { logger, pruneOldLogs } from "./logger.js";
 
 const VERSION = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url))).version;
@@ -28,6 +28,13 @@ app.get("/api/health", (req, res) => {
     uptimeSec: Math.round((Date.now() - startedAt) / 1000),
     sitesCount: listSites().length,
     lastCheckAt: lastCheckTimestamp(),
+  });
+});
+
+app.get("/api/branding", (req, res) => {
+  res.json({
+    name: getSetting("brand_name", "") || "Site Monitor",
+    logoUrl: getSetting("brand_logo_url", ""),
   });
 });
 

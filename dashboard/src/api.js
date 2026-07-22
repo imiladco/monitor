@@ -94,6 +94,12 @@ export const api = {
   commands: (siteId) => request(`/sites/${siteId}/commands`),
   createCommand: (siteId, type, params) =>
     request(`/sites/${siteId}/commands`, { method: "POST", body: JSON.stringify({ type, params }) }),
+  branding: async () => {
+    const res = await fetch("/api/branding");
+    return res.ok ? res.json() : { name: "Site Monitor", logoUrl: "" };
+  },
+  brandingSettings: () => request("/settings/branding"),
+  updateBranding: (data) => request("/settings/branding", { method: "PUT", body: JSON.stringify(data) }),
 };
 
 export async function fetchPublicStatus(token) {

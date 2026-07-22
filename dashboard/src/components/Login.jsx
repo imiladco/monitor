@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { api, getPassword } from "../api.js";
+import { useBranding } from "../useBranding.js";
 
 export default function Login({ onSuccess }) {
+  const branding = useBranding();
   const [password, setPasswordInput] = useState("");
   const [code, setCode] = useState("");
   const [need2fa, setNeed2fa] = useState(false);
@@ -26,7 +28,10 @@ export default function Login({ onSuccess }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-border bg-panel p-6">
-        <h1 className="mb-1 text-lg font-semibold text-gray-100">🛰️ Site Monitor</h1>
+        <h1 className="mb-1 flex items-center gap-2 text-lg font-semibold text-gray-100">
+          {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="h-6 w-6 rounded" /> : "🛰️"}
+          {branding.name}
+        </h1>
         <p className="mb-4 text-sm text-gray-500">برای ورود به داشبورد رمز عبور رو وارد کن</p>
         <input
           type="password"

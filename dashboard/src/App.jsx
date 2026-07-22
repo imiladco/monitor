@@ -5,9 +5,11 @@ import SiteDetail from "./pages/SiteDetail.jsx";
 import SettingsPage from "./pages/Settings.jsx";
 import StatusPage from "./pages/StatusPage.jsx";
 import Login, { isLoggedIn } from "./components/Login.jsx";
+import { useBranding } from "./useBranding.js";
 
 function AdminApp() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn());
+  const branding = useBranding();
 
   useEffect(() => {
     const onAuthError = () => setLoggedIn(false);
@@ -23,8 +25,13 @@ function AdminApp() {
     <div className="min-h-screen bg-canvas">
       <header className="border-b border-border bg-panel/60 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link to="/" className="text-base font-semibold text-gray-100">
-            🛰️ Site Monitor
+          <Link to="/" className="flex items-center gap-2 text-base font-semibold text-gray-100">
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt="" className="h-6 w-6 rounded" />
+            ) : (
+              "🛰️"
+            )}
+            {branding.name}
           </Link>
           <Link to="/settings" className="text-sm text-gray-500 hover:text-gray-300">
             تنظیمات

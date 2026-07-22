@@ -108,6 +108,7 @@ export default function SiteDetail() {
                 checkoutUrl: site.checkoutUrl || "",
                 keyword: site.keyword || "",
                 keywordMode: site.keywordMode || "present",
+                client: site.client || "",
               });
               setEditing(true);
             }}
@@ -142,6 +143,12 @@ export default function SiteDetail() {
               value={editForm.checkoutUrl}
               onChange={(e) => setEditForm({ ...editForm, checkoutUrl: e.target.value })}
               placeholder="آدرس چک‌اوت (اختیاری)"
+              className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
+            />
+            <input
+              value={editForm.client}
+              onChange={(e) => setEditForm({ ...editForm, client: e.target.value })}
+              placeholder="مشتری/پروژه (اختیاری)"
               className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
             />
           </div>
