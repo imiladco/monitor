@@ -10,4 +10,8 @@ export const env = {
   slowResponseMs: Number(process.env.SLOW_RESPONSE_MS || 3000),
   requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 10000),
   dbGrowthWarnPercent: Number(process.env.DB_GROWTH_WARN_PERCENT || 20),
+  deepCheckHour: Number(process.env.DEEP_CHECK_HOUR ?? 3),
+  visualDiffWarnPercent: Number(process.env.VISUAL_DIFF_WARN_PERCENT || 15),
+  lcpWarnMs: Number(process.env.LCP_WARN_MS || 4000),
+  domainWarnDays: Number(process.env.DOMAIN_WARN_DAYS || 30),
 };

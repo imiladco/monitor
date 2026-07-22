@@ -21,6 +21,9 @@ const typeIcon = {
   ssl_warning: "🔒",
   core_integrity: "🚨",
   brute_force: "🛡️",
+  visual_change: "🖼️",
+  cwv_drop: "🐌",
+  domain_warning: "🌐",
 };
 
 function formatTime(iso) {

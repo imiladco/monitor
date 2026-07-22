@@ -56,7 +56,27 @@ export default function SiteDetail() {
         <Stat label="سرعت پاسخ" value={lastCheck?.response_ms != null ? `${lastCheck.response_ms}ms` : "-"} />
         <Stat label="وردپرس" value={agent?.wpVersion || "متصل نیست"} />
         <Stat label="پوسته" value={agent?.theme?.name || "-"} />
+        <Stat label="LCP" value={site.screenshot?.lcpMs != null ? `${site.screenshot.lcpMs}ms` : "-"} />
+        <Stat label="CLS" value={site.screenshot?.cls != null ? site.screenshot.cls : "-"} />
+        <Stat label="انقضای دامنه" value={site.domainDaysLeft != null ? `${site.domainDaysLeft} روز` : "-"} />
+        <Stat
+          label="تغییر ظاهری اخیر"
+          value={site.screenshot?.diffPercent != null ? `${site.screenshot.diffPercent.toFixed(1)}٪` : "-"}
+        />
       </div>
+
+      {site.screenshot && (
+        <div className="mt-6 overflow-hidden rounded-xl border border-border bg-panel">
+          <img
+            src={`/api/sites/${site.id}/screenshot?t=${site.screenshot.capturedAt}`}
+            alt="آخرین اسکرین‌شات هوم‌پیج"
+            className="w-full"
+          />
+          <div className="border-t border-border px-4 py-2 text-xs text-gray-500">
+            آخرین اسکرین‌شات — {new Date(site.screenshot.capturedAt.replace(" ", "T") + "Z").toLocaleString("fa-IR")}
+          </div>
+        </div>
+      )}
 
       {!agent && (
         <div className="mt-6 rounded-xl border border-dashed border-border bg-panel/50 p-4 text-sm text-gray-400">
