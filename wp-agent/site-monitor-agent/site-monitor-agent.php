@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Site Monitor Agent
  * Description: Reports plugin/theme/core updates, admin users, DB size, and core file integrity to your Site Monitor dashboard (Time Machine). Configure under Settings → Site Monitor Agent.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Requires PHP: 7.4
  */
 
@@ -146,15 +146,18 @@ function site_monitor_build_snapshot() {
     }
 
     $theme = wp_get_theme();
-    $users = get_users(['fields' => ['ID', 'user_login']]);
+    // Only administrators are reported. The dashboard uses this solely to
+    // detect a newly-created admin (a compromise signal), so shipping every
+    // subscriber/customer login off-site — potentially thousands on a
+    // WooCommerce store — would be needless data exposure.
+    $admins = get_users(['role' => 'administrator', 'fields' => ['ID', 'user_login']]);
     $users_payload = array_map(function ($u) {
-        $userdata = get_userdata($u->ID);
         return [
-            'id' => $u->ID,
+            'id' => (int) $u->ID,
             'login' => $u->user_login,
-            'roles' => $userdata ? $userdata->roles : [],
+            'roles' => ['administrator'],
         ];
-    }, $users);
+    }, $admins);
 
     $db_size_mb = $wpdb->get_var($wpdb->prepare(
         "SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2)
