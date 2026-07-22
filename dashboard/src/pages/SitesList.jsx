@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import SiteCard from "../components/SiteCard.jsx";
+import { useToast } from "../components/Toast.jsx";
 
 function AddSiteForm({ onAdded, onCancel }) {
+  const toast = useToast();
   const [form, setForm] = useState({ name: "", url: "", checkoutUrl: "", client: "" });
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -13,6 +15,7 @@ function AddSiteForm({ onAdded, onCancel }) {
     setError(null);
     try {
       await api.createSite(form);
+      toast.success(`${form.name} اضافه شد`);
       onAdded();
     } catch (err) {
       setError(err.message);

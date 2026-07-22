@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { useConfirm } from "./ConfirmDialog.jsx";
+import { useToast } from "./Toast.jsx";
 
 function toSqliteUtc(localDatetimeValue) {
   return new Date(localDatetimeValue).toISOString().slice(0, 19).replace("T", " ");
@@ -19,6 +21,8 @@ function status(window) {
 }
 
 export default function MaintenanceWindows({ siteId }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [windows, setWindows] = useState(null);
   const [form, setForm] = useState({ note: "", starts: "", ends: "", global: false });
   const [error, setError] = useState(null);
@@ -43,14 +47,18 @@ export default function MaintenanceWindows({ siteId }) {
       });
       setForm({ note: "", starts: "", ends: "", global: false });
       load();
+      toast.success("پنجره‌ی تعمیرات اضافه شد");
     } catch (err) {
       setError(err.message);
     }
   }
 
   async function remove(id) {
+    const ok = await confirm({ title: "حذف پنجره‌ی تعمیرات" });
+    if (!ok) return;
     await api.deleteMaintenanceWindow(id);
     load();
+    toast.info("حذف شد");
   }
 
   return (

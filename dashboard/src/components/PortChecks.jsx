@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { useConfirm } from "./ConfirmDialog.jsx";
+import { useToast } from "./Toast.jsx";
 
 export default function PortChecks({ siteId }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [checks, setChecks] = useState(null);
   const [form, setForm] = useState({ label: "", host: "", port: "" });
   const [error, setError] = useState(null);
@@ -23,14 +27,18 @@ export default function PortChecks({ siteId }) {
       await api.createPortCheck(siteId, { ...form, port: Number(form.port) });
       setForm({ label: "", host: "", port: "" });
       load();
+      toast.success("مانیتور پورت اضافه شد");
     } catch (err) {
       setError(err.message);
     }
   }
 
   async function remove(id) {
+    const ok = await confirm({ title: "حذف مانیتور پورت", danger: true });
+    if (!ok) return;
     await api.deletePortCheck(id);
     load();
+    toast.info("حذف شد");
   }
 
   return (

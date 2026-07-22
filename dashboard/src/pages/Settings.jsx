@@ -5,8 +5,12 @@ import TelegramTopics from "../components/TelegramTopics.jsx";
 import TwoFactorSettings from "../components/TwoFactorSettings.jsx";
 import RemoteActionsToggle from "../components/RemoteActionsToggle.jsx";
 import BrandingSettings from "../components/BrandingSettings.jsx";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
+import { useToast } from "../components/Toast.jsx";
 
 export default function SettingsPage() {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "", telegramGroupId: "" });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -30,15 +34,22 @@ export default function SettingsPage() {
   const statusPageUrl = statusToken ? `${window.location.origin}/#/status/${statusToken}` : "";
 
   async function regenerateStatusPage() {
-    if (!confirm("لینک قبلی پیج وضعیت دیگه کار نمی‌کنه. مطمئنی؟")) return;
+    const ok = await confirm({
+      title: "ساخت لینک جدید",
+      message: "لینک قبلی پیج وضعیت دیگه کار نمی‌کنه. مطمئنی؟",
+      danger: true,
+    });
+    if (!ok) return;
     const { token } = await api.regenerateStatusPage();
     setStatusToken(token);
+    toast.success("لینک جدید ساخته شد");
   }
 
   async function submit(e) {
     e.preventDefault();
     await api.updateSettings(form);
     setSaved(true);
+    toast.success("تنظیمات ذخیره شد");
     setTimeout(() => setSaved(false), 2000);
   }
 

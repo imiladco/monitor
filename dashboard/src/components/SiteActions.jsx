@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { useConfirm } from "./ConfirmDialog.jsx";
+import { useToast } from "./Toast.jsx";
 
 const typeLabel = { plugin: "افزونه", theme: "پوسته", core: "هسته‌ی وردپرس" };
 
@@ -12,6 +14,8 @@ function formatTime(iso) {
 }
 
 export default function SiteActions({ site, remoteActionsEnabled }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [commands, setCommands] = useState(null);
   const [queuing, setQueuing] = useState(null);
 
@@ -30,6 +34,14 @@ export default function SiteActions({ site, remoteActionsEnabled }) {
   const updates = site.agent?.updatesAvailable || [];
 
   async function runUpdate(update) {
+    if (update.type === "core") {
+      const ok = await confirm({
+        title: "آپدیت هسته‌ی وردپرس",
+        message: `${site.name} از ${update.currentVersion} به ${update.newVersion} آپدیت بشه؟ این ریسک‌دارترین نوع آپدیته.`,
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setQueuing(update.slug);
     try {
       await api.createCommand(
@@ -38,6 +50,7 @@ export default function SiteActions({ site, remoteActionsEnabled }) {
         update.type === "core" ? {} : { slug: update.slug }
       );
       await loadCommands();
+      toast.success(`دستور آپدیت ${update.name} ارسال شد`);
     } finally {
       setQueuing(null);
     }
@@ -48,6 +61,7 @@ export default function SiteActions({ site, remoteActionsEnabled }) {
     try {
       await api.createCommand(site.id, "clear_cache");
       await loadCommands();
+      toast.success("دستور پاک‌کردن کش ارسال شد");
     } finally {
       setQueuing(null);
     }

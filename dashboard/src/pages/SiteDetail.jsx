@@ -7,10 +7,14 @@ import Timeline from "../components/Timeline.jsx";
 import MaintenanceWindows from "../components/MaintenanceWindows.jsx";
 import PortChecks from "../components/PortChecks.jsx";
 import SiteActions from "../components/SiteActions.jsx";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
+import { useToast } from "../components/Toast.jsx";
 
 export default function SiteDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [site, setSite] = useState(null);
   const [checks, setChecks] = useState(null);
   const [events, setEvents] = useState(null);
@@ -53,20 +57,28 @@ export default function SiteDetail() {
       await api.updateSite(site.id, editForm);
       setEditing(false);
       setSite(await api.site(id));
+      toast.success("ذخیره شد");
     } catch (err) {
       setSaveError(err.message);
     }
   }
 
   async function remove() {
-    if (!confirm(`سایت «${site.name}» حذف بشه؟ تاریخچه و تایم‌لاینش هم پاک می‌شه.`)) return;
+    const ok = await confirm({
+      title: "حذف سایت",
+      message: `سایت «${site.name}» حذف بشه؟ تاریخچه و تایم‌لاینش هم پاک می‌شه.`,
+      danger: true,
+    });
+    if (!ok) return;
     await api.deleteSite(site.id);
+    toast.success("سایت حذف شد");
     navigate("/");
   }
 
   async function togglePause() {
     await api.setPaused(site.id, !site.paused);
     setSite(await api.site(id));
+    toast.info(site.paused ? "مانیتورینگ ادامه پیدا کرد" : "مانیتورینگ مکث شد");
   }
 
   async function togglePublic() {
