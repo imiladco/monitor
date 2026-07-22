@@ -54,7 +54,10 @@ async function runVisualAndVitals(site) {
       severity: diff >= 40 ? "critical" : "warning",
       source: "external",
     });
-    await sendTelegram(`<b>${site.name}</b> — ${diff.toFixed(1)}٪ تغییر ظاهری در هوم‌پیج تشخیص داده شد\n${site.url}`);
+    await sendTelegram(
+      `<b>${site.name}</b> — ${diff.toFixed(1)}٪ تغییر ظاهری در هوم‌پیج تشخیص داده شد\n${site.url}`,
+      "performance"
+    );
   }
 
   if (audit.lcpMs != null) {
@@ -68,7 +71,7 @@ async function runVisualAndVitals(site) {
         title: `🐌 LCP بدتر شد: ${audit.lcpMs}ms (بالاتر از حد قابل قبول)`,
         severity: "warning",
       });
-      await sendTelegram(`<b>${site.name}</b> — سرعت بارگذاری (LCP) افت کرد: ${audit.lcpMs}ms`);
+      await sendTelegram(`<b>${site.name}</b> — سرعت بارگذاری (LCP) افت کرد: ${audit.lcpMs}ms`, "performance");
     }
   }
 }
@@ -90,7 +93,7 @@ async function runDomainCheck(site) {
   if (shouldWarn && !alreadyWarned) {
     const title = `🌐 دامنه تا ${result.daysLeft} روز دیگه منقضی می‌شه`;
     recordEvent(site.id, { type: "domain_warning", title, severity: "warning" });
-    await sendTelegram(`<b>${site.name}</b> ${title}`);
+    await sendTelegram(`<b>${site.name}</b> ${title}`, "domain");
   }
 }
 
