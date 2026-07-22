@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import FleetAlerts from "../components/FleetAlerts.jsx";
+import FleetIncidents from "../components/FleetIncidents.jsx";
 import Sparkline from "../components/Sparkline.jsx";
 import SitePanel from "../components/SitePanel.jsx";
 import SiteHoverCard from "../components/SiteHoverCard.jsx";
@@ -292,6 +293,7 @@ export default function SitesList() {
   const [pill, setPill] = useState("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  const [incidents, setIncidents] = useState([]);
   const [params, setParams] = useSearchParams();
 
   const sort = params.get("sort") || "status";
@@ -308,9 +310,15 @@ export default function SitesList() {
   async function load() {
     try {
       setSites(await api.sites());
+      api.incidents("open").then(setIncidents).catch(() => {});
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  async function acknowledge(id) {
+    await api.acknowledgeIncident(id);
+    setIncidents(await api.incidents("open"));
   }
 
   useEffect(() => {
@@ -368,6 +376,7 @@ export default function SitesList() {
   return (
     <div>
       <FleetAlerts />
+      <FleetIncidents incidents={incidents} onAcknowledge={acknowledge} />
 
       {/* slim summary strip */}
       <div className="mb-4 flex items-center gap-5 rounded-lg border border-border bg-surface px-4 py-2 text-xs text-content-secondary">
@@ -381,6 +390,9 @@ export default function SitesList() {
         </span>
         <span>
           CVE: <span className="tnum text-bad">{totalCve}</span>
+        </span>
+        <span>
+          رخداد باز: <span className="tnum text-bad">{incidents.length}</span>
         </span>
         <div className="mr-auto">
           {!showAdd && (
