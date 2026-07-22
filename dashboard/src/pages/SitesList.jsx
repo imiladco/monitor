@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import FleetAlerts from "../components/FleetAlerts.jsx";
 import Sparkline from "../components/Sparkline.jsx";
 import SitePanel from "../components/SitePanel.jsx";
+import { OPEN_PALETTE_EVENT } from "../components/CommandPalette.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 
@@ -315,6 +316,25 @@ export default function SitesList() {
     return () => clearInterval(interval);
   }, []);
 
+  // One-shot triggers from the command palette (?add=1 / ?site=<id>), consumed
+  // then stripped from the URL so they don't re-fire or clutter it.
+  useEffect(() => {
+    let changed = false;
+    const next = new URLSearchParams(params);
+    if (next.get("add") === "1") {
+      setShowAdd(true);
+      next.delete("add");
+      changed = true;
+    }
+    const site = next.get("site");
+    if (site) {
+      setSelectedId(Number(site));
+      next.delete("site");
+      changed = true;
+    }
+    if (changed) setParams(next, { replace: true });
+  }, [params, setParams]);
+
   const clients = useMemo(
     () => (sites ? [...new Set(sites.map((s) => s.client).filter(Boolean))].sort() : []),
     [sites]
@@ -390,9 +410,14 @@ export default function SitesList() {
             placeholder="جستجوی سایت…"
             className="w-56 rounded-md border border-border bg-surface-2 py-1.5 pr-3 pl-12 text-xs text-content outline-none focus:border-accent"
           />
-          <span className="tnum pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 rounded border border-border px-1 text-[10px] text-muted">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}
+            title="باز کردن جستجوی فرمان"
+            className="tnum absolute left-2 top-1/2 -translate-y-1/2 rounded border border-border px-1 text-[10px] text-muted hover:border-border-strong hover:text-content-secondary"
+          >
             ⌘K
-          </span>
+          </button>
         </div>
         <div className="flex flex-wrap items-center gap-1">
           {PILLS.map((p) => (
