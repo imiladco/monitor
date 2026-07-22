@@ -4,7 +4,7 @@ import { checkUptime } from "./checks/uptime.js";
 import { checkSsl } from "./checks/ssl.js";
 import { checkPort } from "./checks/port.js";
 import { sendTelegram, notifySite } from "./notify/telegram.js";
-import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks, recoverStuckCommands } from "./db.js";
+import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks, recoverStuckCommands, pruneExpiredSessions } from "./db.js";
 import { runDeepChecks } from "./deepChecks.js";
 import { backupDatabase } from "./backup.js";
 import { runVulnerabilityScan } from "./vuln/index.js";
@@ -171,6 +171,7 @@ export function startScheduler() {
   cron.schedule(`0 ${env.backupHour} * * *`, () => {
     backupDatabase();
     pruneOldLogs();
+    pruneExpiredSessions();
   });
   cron.schedule(`0 ${env.vulnSyncHour} * * *`, () =>
     runVulnerabilityScan().catch((err) => logger.error("vuln: scan failed", { error: err.message }))

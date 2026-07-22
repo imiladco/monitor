@@ -1,30 +1,15 @@
-const STORAGE_KEY = "admin_password";
-
-export function getPassword() {
-  return localStorage.getItem(STORAGE_KEY) || "";
-}
-
-export function setPassword(password) {
-  localStorage.setItem(STORAGE_KEY, password);
-}
-
-export function clearPassword() {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
 class AuthError extends Error {}
 
 async function request(path, options = {}) {
   const res = await fetch(`/api${path}`, {
+    credentials: "same-origin", // send the httpOnly session cookie
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-Admin-Password": getPassword(),
       ...options.headers,
     },
   });
   if (res.status === 401) {
-    clearPassword();
     window.dispatchEvent(new Event("auth-error"));
     throw new AuthError("unauthorized");
   }
@@ -41,6 +26,7 @@ export const api = {
   login: async (password, code) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password, code }),
     });
@@ -50,8 +36,14 @@ export const api = {
       err.require2fa = Boolean(body.require2fa);
       throw err;
     }
-    setPassword(password);
   },
+  session: async () => {
+    const res = await fetch("/api/auth/session", { credentials: "same-origin" });
+    if (!res.ok) return false;
+    return Boolean((await res.json()).authenticated);
+  },
+  logout: () =>
+    fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {}),
   sites: () => request("/sites"),
   site: (id) => request(`/sites/${id}`),
   createSite: (data) => request("/sites", { method: "POST", body: JSON.stringify(data) }),
@@ -69,7 +61,7 @@ export const api = {
     request(`/settings/telegram-topics/${category}`, { method: "PUT", body: JSON.stringify({ threadId }) }),
   testTelegramTopic: (category) => request(`/settings/telegram-topics/${category}/test`, { method: "POST" }),
   screenshotUrl: (id, capturedAt) =>
-    `/api/sites/${id}/screenshot?t=${encodeURIComponent(capturedAt)}&pw=${encodeURIComponent(getPassword())}`,
+    `/api/sites/${id}/screenshot?t=${encodeURIComponent(capturedAt)}`,
   setPaused: (id, paused) => request(`/sites/${id}/pause`, { method: "PATCH", body: JSON.stringify({ paused }) }),
   setPublic: (id, isPublic) =>
     request(`/sites/${id}/public`, { method: "PATCH", body: JSON.stringify({ public: isPublic }) }),
@@ -86,8 +78,7 @@ export const api = {
   createPortCheck: (siteId, data) =>
     request(`/sites/${siteId}/port-checks`, { method: "POST", body: JSON.stringify(data) }),
   deletePortCheck: (id) => request(`/port-checks/${id}`, { method: "DELETE" }),
-  slaReportUrl: (siteId, days) =>
-    `/api/sites/${siteId}/sla-report?days=${days}&pw=${encodeURIComponent(getPassword())}`,
+  slaReportUrl: (siteId, days) => `/api/sites/${siteId}/sla-report?days=${days}`,
   remoteActionsStatus: () => request("/settings/remote-actions"),
   setRemoteActionsEnabled: (enabled) =>
     request("/settings/remote-actions", { method: "PUT", body: JSON.stringify({ enabled }) }),
