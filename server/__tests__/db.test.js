@@ -34,6 +34,8 @@ const {
   claimPendingCommands,
   completeCommand,
   recoverStuckCommands,
+  getSiteByApiKey,
+  regenerateSiteApiKey,
   listClients,
 } = await import("../db.js");
 
@@ -203,6 +205,36 @@ test("recoverStuckCommands requeues only leases older than the window", () => {
   assert.equal(recovered, 1);
   assert.equal(listCommands(site.id).find((c) => c.id === stale.id).status, "pending");
   assert.equal(listCommands(site.id).find((c) => c.id === fresh.id).status, "running");
+});
+
+test("agent keys are stored hashed: raw key resolves, but is never persisted in plaintext", () => {
+  const raw = "raw-agent-secret-xyz";
+  const site = createSite({ name: "Keyed", url: "https://keyed.example.com", apiKey: raw });
+
+  // The agent authenticates with the raw key.
+  assert.equal(getSiteByApiKey(raw)?.id, site.id);
+  // The plaintext is nowhere in the row; the stored column is the SHA-256 hash.
+  const stored = db.prepare("SELECT api_key FROM sites WHERE id = ?").get(site.id).api_key;
+  assert.notEqual(stored, raw);
+  assert.match(stored, /^[a-f0-9]{64}$/);
+});
+
+test("regenerateSiteApiKey rotates the key: new one works, old one stops", () => {
+  const raw = "first-key";
+  const site = createSite({ name: "Rotate", url: "https://rotate.example.com", apiKey: raw });
+  assert.equal(getSiteByApiKey(raw)?.id, site.id);
+
+  const newKey = regenerateSiteApiKey(site.id);
+  assert.match(newKey, /^[a-f0-9]{48}$/);
+  assert.equal(getSiteByApiKey(newKey)?.id, site.id);
+  assert.equal(getSiteByApiKey(raw), undefined); // old key no longer valid
+  assert.equal(regenerateSiteApiKey(999999), null); // unknown site
+});
+
+test("getSiteByApiKey ignores empty/missing keys", () => {
+  assert.equal(getSiteByApiKey(""), undefined);
+  assert.equal(getSiteByApiKey(null), undefined);
+  assert.equal(getSiteByApiKey(undefined), undefined);
 });
 
 test("listClients returns distinct, sorted, non-empty client names", () => {

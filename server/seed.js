@@ -17,15 +17,14 @@ export function seedSitesFromConfig() {
   }
   const sites = JSON.parse(fs.readFileSync(SITES_PATH, "utf8"));
   for (const site of sites) {
-    upsertSite({
-      name: site.name,
-      url: site.url,
-      checkoutUrl: site.checkoutUrl,
-      apiKey: crypto.randomBytes(24).toString("hex"),
+    // Generate the raw key here so we can log it once for setup — the DB only
+    // ever stores its hash.
+    const apiKey = crypto.randomBytes(24).toString("hex");
+    upsertSite({ name: site.name, url: site.url, checkoutUrl: site.checkoutUrl, apiKey });
+    logger.info("seed: site agent key (shown once — copy into the WP agent now)", {
+      site: site.name,
+      apiKey,
     });
   }
   logger.info("seed: sites synced from config/sites.json", { count: sites.length });
-  for (const s of listSites()) {
-    logger.info("seed: site agent key", { site: s.name, apiKey: s.api_key });
-  }
 }

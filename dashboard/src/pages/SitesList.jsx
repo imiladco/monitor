@@ -9,20 +9,54 @@ function AddSiteForm({ onAdded, onCancel }) {
   const [form, setForm] = useState({ name: "", url: "", checkoutUrl: "", client: "" });
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [created, setCreated] = useState(null); // { name, apiKey } — shown once
+  const [copied, setCopied] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await api.createSite(form);
+      const res = await api.createSite(form);
       toast.success(`${form.name} اضافه شد`);
-      onAdded();
+      setCreated({ name: form.name, apiKey: res.apiKey });
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
+  }
+
+  if (created) {
+    return (
+      <div className="mb-6 rounded-2xl border border-border bg-panel p-5 text-sm text-gray-300">
+        <p className="mb-1 font-medium text-gray-100">«{created.name}» اضافه شد ✓</p>
+        <p className="mb-2 text-xs text-good">
+          کلید API — فقط همین یک‌بار نمایش داده می‌شه؛ همین حالا داخل تنظیمات پلاگین همراه ذخیره‌ش کن:
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="break-all rounded bg-panel2 px-2 py-1 text-xs text-gray-300" dir="ltr">
+            {created.apiKey}
+          </code>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(created.apiKey);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            className="shrink-0 rounded-md bg-panel2 px-2 py-1 text-xs text-gray-300 hover:bg-border"
+          >
+            {copied ? "کپی شد ✓" : "کپی"}
+          </button>
+        </div>
+        <button
+          onClick={onAdded}
+          className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
+        >
+          تمام
+        </button>
+      </div>
+    );
   }
 
   return (
