@@ -7,6 +7,7 @@ import Timeline from "../components/Timeline.jsx";
 import MaintenanceWindows from "../components/MaintenanceWindows.jsx";
 import PortChecks from "../components/PortChecks.jsx";
 import SiteActions from "../components/SiteActions.jsx";
+import SiteVulnerabilities from "../components/SiteVulnerabilities.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { useToast } from "../components/Toast.jsx";
 
@@ -234,6 +235,7 @@ export default function SiteDetail() {
         </a>
       </div>
 
+      <SiteVulnerabilities siteId={site.id} />
       <SiteActions site={site} remoteActionsEnabled={remoteActionsEnabled} />
       <MaintenanceWindows siteId={site.id} />
       <PortChecks siteId={site.id} />

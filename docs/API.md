@@ -63,6 +63,15 @@ Agent-facing (own `X-Api-Key` auth, not admin password):
 - `GET /agent/commands` — claims this site's pending commands (marks them `running`)
 - `POST /agent/commands/:id/result` — `{ status: "done"|"failed", result: string }`
 
+## Vulnerabilities (CVE cross-reference)
+
+- `GET /vulnerabilities` — fleet-wide active findings (one row per vuln × site)
+- `GET /sites/:id/vulnerabilities` — active findings for one site
+- `POST /vulnerabilities` — manual entry: `{ pluginSlug, affectedVersions, fixedIn?, severity?, title, description?, cveId?, referenceUrl? }` (stored as `source:'manual'`)
+- `DELETE /vulnerabilities/:id`
+- `POST /sites/:id/vulnerabilities/:vulnId/resolve` — mark one site's finding resolved (false positive / manual fix)
+- `POST /vulnerabilities/scan` — trigger a scan now (also runs daily at `VULN_SYNC_HOUR`)
+
 ## Settings
 
 - `GET /settings` / `PUT /settings` — Telegram bot token / chat id / group id (bot token is masked in responses)

@@ -107,6 +107,40 @@ CREATE TABLE IF NOT EXISTS commands (
   completed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_commands_site_status ON commands(site_id, status);
+
+-- CVE / vulnerability cross-reference (v2 phase A). local-first: seeded from
+-- data/local-vulnerabilities.seed.json, optionally augmented by an external
+-- feed. Matched against each site's installed plugins from agent snapshots.
+CREATE TABLE IF NOT EXISTS vulnerabilities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  plugin_slug TEXT,
+  theme_slug TEXT,
+  affected_versions TEXT NOT NULL,
+  fixed_in TEXT,
+  severity TEXT NOT NULL DEFAULT 'medium',
+  title TEXT NOT NULL,
+  description TEXT,
+  cve_id TEXT,
+  reference_url TEXT,
+  published_at TEXT,
+  fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(source, source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_vuln_plugin ON vulnerabilities(plugin_slug);
+
+CREATE TABLE IF NOT EXISTS site_vulnerabilities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  vulnerability_id INTEGER NOT NULL REFERENCES vulnerabilities(id) ON DELETE CASCADE,
+  installed_version TEXT,
+  detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resolved_at TEXT,
+  notified_at TEXT,
+  UNIQUE(site_id, vulnerability_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sitevuln_site ON site_vulnerabilities(site_id, resolved_at);
 `);
 
 // Lightweight migration: add columns that didn't exist in earlier releases
@@ -419,6 +453,103 @@ export function listAllPortChecks() {
     .prepare(
       `SELECT port_checks.*, sites.name AS site_name, sites.paused AS site_paused
        FROM port_checks JOIN sites ON sites.id = port_checks.site_id`
+    )
+    .all();
+}
+
+/* --- Vulnerabilities (v2 phase A) --- */
+
+export function upsertVulnerability(v) {
+  db.prepare(
+    `INSERT INTO vulnerabilities
+       (source, source_id, plugin_slug, theme_slug, affected_versions, fixed_in, severity, title, description, cve_id, reference_url, published_at)
+     VALUES (@source, @source_id, @plugin_slug, @theme_slug, @affected_versions, @fixed_in, @severity, @title, @description, @cve_id, @reference_url, @published_at)
+     ON CONFLICT(source, source_id) DO UPDATE SET
+       plugin_slug=excluded.plugin_slug, theme_slug=excluded.theme_slug,
+       affected_versions=excluded.affected_versions, fixed_in=excluded.fixed_in,
+       severity=excluded.severity, title=excluded.title, description=excluded.description,
+       cve_id=excluded.cve_id, reference_url=excluded.reference_url,
+       published_at=excluded.published_at, fetched_at=datetime('now')`
+  ).run({
+    source: v.source,
+    source_id: v.source_id,
+    plugin_slug: v.plugin_slug ?? null,
+    theme_slug: v.theme_slug ?? null,
+    affected_versions: v.affected_versions,
+    fixed_in: v.fixed_in ?? null,
+    severity: v.severity ?? "medium",
+    title: v.title,
+    description: v.description ?? null,
+    cve_id: v.cve_id ?? null,
+    reference_url: v.reference_url ?? null,
+    published_at: v.published_at ?? null,
+  });
+  return db.prepare("SELECT * FROM vulnerabilities WHERE source = ? AND source_id = ?").get(v.source, v.source_id);
+}
+
+export function listVulnerabilitiesForPlugin(pluginSlug) {
+  return db.prepare("SELECT * FROM vulnerabilities WHERE plugin_slug = ?").all(pluginSlug);
+}
+
+export function deleteVulnerability(id) {
+  db.prepare("DELETE FROM vulnerabilities WHERE id = ?").run(id);
+}
+
+// Returns true only when this is a *newly active* finding — either first-ever
+// detection, or a previously-resolved one that's now affected again. Returns
+// false when the finding is already active (so callers don't re-alert). SQLite
+// upsert reports changes=1 for both insert and update, so we branch explicitly.
+export function recordSiteVulnerability(siteId, vulnerabilityId, installedVersion) {
+  const existing = db
+    .prepare("SELECT id, resolved_at FROM site_vulnerabilities WHERE site_id = ? AND vulnerability_id = ?")
+    .get(siteId, vulnerabilityId);
+
+  if (!existing) {
+    db.prepare(
+      "INSERT INTO site_vulnerabilities (site_id, vulnerability_id, installed_version) VALUES (?, ?, ?)"
+    ).run(siteId, vulnerabilityId, installedVersion ?? null);
+    return true;
+  }
+
+  const wasResolved = existing.resolved_at != null;
+  db.prepare(
+    "UPDATE site_vulnerabilities SET installed_version = ?, resolved_at = NULL WHERE id = ?"
+  ).run(installedVersion ?? null, existing.id);
+  return wasResolved;
+}
+
+export function resolveSiteVulnerability(siteId, vulnerabilityId) {
+  db.prepare(
+    "UPDATE site_vulnerabilities SET resolved_at = datetime('now') WHERE site_id = ? AND vulnerability_id = ? AND resolved_at IS NULL"
+  ).run(siteId, vulnerabilityId);
+}
+
+export function markSiteVulnerabilityNotified(id) {
+  db.prepare("UPDATE site_vulnerabilities SET notified_at = datetime('now') WHERE id = ?").run(id);
+}
+
+export function activeSiteVulnerabilities(siteId) {
+  return db
+    .prepare(
+      `SELECT sv.id AS link_id, sv.installed_version, sv.detected_at, v.*
+       FROM site_vulnerabilities sv JOIN vulnerabilities v ON v.id = sv.vulnerability_id
+       WHERE sv.site_id = ? AND sv.resolved_at IS NULL
+       ORDER BY CASE v.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END`
+    )
+    .all(siteId);
+}
+
+// Fleet-wide active vulnerabilities, one row per (vuln, site) pair.
+export function fleetVulnerabilities() {
+  return db
+    .prepare(
+      `SELECT sv.id AS link_id, sv.site_id, sv.installed_version, sv.detected_at, sv.notified_at,
+              s.name AS site_name, v.*
+       FROM site_vulnerabilities sv
+       JOIN vulnerabilities v ON v.id = sv.vulnerability_id
+       JOIN sites s ON s.id = sv.site_id
+       WHERE sv.resolved_at IS NULL
+       ORDER BY CASE v.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, sv.detected_at DESC`
     )
     .all();
 }
