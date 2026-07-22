@@ -15,4 +15,5 @@ export const env = {
   visualDiffWarnPercent: Number(process.env.VISUAL_DIFF_WARN_PERCENT || 15),
   lcpWarnMs: Number(process.env.LCP_WARN_MS || 4000),
   domainWarnDays: Number(process.env.DOMAIN_WARN_DAYS || 30),
+  backupHour: Number(process.env.BACKUP_HOUR ?? 4),
 };

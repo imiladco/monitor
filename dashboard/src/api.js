@@ -38,13 +38,18 @@ async function request(path, options = {}) {
 export { AuthError };
 
 export const api = {
-  login: async (password) => {
+  login: async (password, code) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password, code }),
     });
-    if (!res.ok) throw new Error("رمز عبور اشتباهه");
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(body.error || "رمز عبور اشتباهه");
+      err.require2fa = Boolean(body.require2fa);
+      throw err;
+    }
     setPassword(password);
   },
   sites: () => request("/sites"),
@@ -70,6 +75,10 @@ export const api = {
     request(`/sites/${id}/public`, { method: "PATCH", body: JSON.stringify({ public: isPublic }) }),
   statusPage: () => request("/settings/status-page"),
   regenerateStatusPage: () => request("/settings/status-page/regenerate", { method: "POST" }),
+  twoFactorStatus: () => request("/settings/2fa"),
+  twoFactorSetup: () => request("/settings/2fa/setup", { method: "POST" }),
+  twoFactorConfirm: (code) => request("/settings/2fa/confirm", { method: "POST", body: JSON.stringify({ code }) }),
+  twoFactorDisable: (code) => request("/settings/2fa/disable", { method: "POST", body: JSON.stringify({ code }) }),
 };
 
 export async function fetchPublicStatus(token) {

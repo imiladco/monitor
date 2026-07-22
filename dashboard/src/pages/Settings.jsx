@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import TelegramTopics from "../components/TelegramTopics.jsx";
+import TwoFactorSettings from "../components/TwoFactorSettings.jsx";
 
 export default function SettingsPage() {
   const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "", telegramGroupId: "" });
@@ -59,8 +60,11 @@ export default function SettingsPage() {
       <Link to="/" className="text-sm text-gray-500 hover:text-gray-300">
         ← بازگشت به لیست سایت‌ها
       </Link>
-      <h2 className="mb-6 mt-3 text-lg font-semibold text-gray-100">تنظیمات تلگرام</h2>
+      <h2 className="mb-6 mt-3 text-lg font-semibold text-gray-100">تنظیمات</h2>
 
+      <TwoFactorSettings />
+
+      <h3 className="mb-3 mt-8 font-medium text-gray-100">تلگرام</h3>
       <form onSubmit={submit} className="max-w-md space-y-4 rounded-2xl border border-border bg-panel p-6">
         <div>
           <label className="mb-1 block text-sm text-gray-400">Bot Token</label>

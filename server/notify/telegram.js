@@ -1,5 +1,6 @@
 import { env } from "../config.js";
 import { getSetting, getTelegramTopic } from "../db.js";
+import { logger } from "../logger.js";
 
 export async function sendTelegram(text, category = null) {
   const botToken = getSetting("telegram_bot_token", env.telegramBotToken);
@@ -10,7 +11,7 @@ export async function sendTelegram(text, category = null) {
   const topic = groupId && category ? getTelegramTopic(category) : null;
 
   if (!botToken || !chatId) {
-    console.warn("[telegram] bot token / chat id not set (panel or .env), skipping alert:\n", text);
+    logger.warn("telegram: bot token/chat id not set, skipping alert", { text });
     return { ok: false, error: "توکن یا chat id تنظیم نشده" };
   }
 
@@ -29,13 +30,13 @@ export async function sendTelegram(text, category = null) {
       }),
     });
   } catch (err) {
-    console.error(`[telegram] request failed: ${err.message}`);
+    logger.error("telegram: request failed", { error: err.message });
     return { ok: false, error: err.message };
   }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    console.error(`[telegram] failed to send message: ${res.status} ${body.description || ""}`);
+    logger.error("telegram: send failed", { status: res.status, description: body.description });
     return { ok: false, error: body.description || `HTTP ${res.status}` };
   }
 

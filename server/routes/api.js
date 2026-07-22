@@ -1,8 +1,10 @@
 import { Router } from "express";
 import fs from "node:fs";
 import crypto from "node:crypto";
+import QRCode from "qrcode";
 import { sendTelegram, callTelegramApi } from "../notify/telegram.js";
 import { CATEGORIES } from "../telegramCategories.js";
+import { generateSecret, otpauthUrl, verifyToken } from "../totp.js";
 import {
   listSites,
   getSiteById,
@@ -126,6 +128,44 @@ apiRouter.put("/settings", (req, res) => {
 apiRouter.post("/settings/test-telegram", async (req, res) => {
   const result = await sendTelegram("🔔 پیام تست از Site Monitor — اتصال تلگرام درست کار می‌کنه.");
   res.json(result);
+});
+
+apiRouter.get("/settings/2fa", (req, res) => {
+  res.json({ enabled: getSetting("totp_enabled", "") === "1" });
+});
+
+// Generates a new secret and returns a scannable QR code, but doesn't
+// enable 2FA yet — that only happens once /confirm verifies the user
+// actually has it set up correctly in their authenticator app.
+apiRouter.post("/settings/2fa/setup", async (req, res) => {
+  const secret = generateSecret();
+  setSetting("totp_secret_pending", secret);
+  const url = otpauthUrl(secret, { label: "admin", issuer: "Site Monitor" });
+  const qrDataUrl = await QRCode.toDataURL(url);
+  res.json({ secret, qrDataUrl });
+});
+
+apiRouter.post("/settings/2fa/confirm", (req, res) => {
+  const pending = getSetting("totp_secret_pending", "");
+  if (!pending) return res.status(400).json({ error: "اول باید Setup رو بزنی" });
+  if (!verifyToken(pending, req.body?.code)) {
+    return res.status(400).json({ error: "کد اشتباهه" });
+  }
+  setSetting("totp_secret", pending);
+  setSetting("totp_enabled", "1");
+  setSetting("totp_secret_pending", "");
+  res.json({ ok: true });
+});
+
+apiRouter.post("/settings/2fa/disable", (req, res) => {
+  const secret = getSetting("totp_secret", "");
+  if (getSetting("totp_enabled", "") !== "1") return res.json({ ok: true });
+  if (!secret || !verifyToken(secret, req.body?.code)) {
+    return res.status(400).json({ error: "برای غیرفعال کردن، کد فعلی اپ Authenticator رو وارد کن" });
+  }
+  setSetting("totp_enabled", "0");
+  setSetting("totp_secret", "");
+  res.json({ ok: true });
 });
 
 // Finds the most recent group/supergroup chat the bot has seen a message in

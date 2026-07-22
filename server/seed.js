@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { upsertSite, listSites } from "./db.js";
+import { logger } from "./logger.js";
 
 const SITES_PATH = path.resolve("config/sites.json");
 
@@ -11,7 +12,7 @@ export function seedSitesFromConfig() {
   if (listSites().length > 0) return;
 
   if (!fs.existsSync(SITES_PATH)) {
-    console.warn("[seed] no sites yet and config/sites.json not found — add sites from the dashboard.");
+    logger.warn("seed: no sites yet and config/sites.json not found — add sites from the dashboard");
     return;
   }
   const sites = JSON.parse(fs.readFileSync(SITES_PATH, "utf8"));
@@ -23,8 +24,8 @@ export function seedSitesFromConfig() {
       apiKey: crypto.randomBytes(24).toString("hex"),
     });
   }
-  console.log(`[seed] ${sites.length} site(s) synced from config/sites.json`);
+  logger.info("seed: sites synced from config/sites.json", { count: sites.length });
   for (const s of listSites()) {
-    console.log(`  - ${s.name}: agent api key = ${s.api_key}`);
+    logger.info("seed: site agent key", { site: s.name, apiKey: s.api_key });
   }
 }

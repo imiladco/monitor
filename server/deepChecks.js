@@ -6,6 +6,7 @@ import { diffPercent } from "./checks/visualDiff.js";
 import { checkDomainExpiry } from "./checks/domain.js";
 import { listSites, latestScreenshot, recordScreenshot, recordCheck, latestCheck, recordEvent } from "./db.js";
 import { sendTelegram } from "./notify/telegram.js";
+import { logger } from "./logger.js";
 
 const SCREENSHOT_DIR = path.resolve("data/screenshots");
 
@@ -16,7 +17,7 @@ function hostnameOf(url) {
 async function runVisualAndVitals(site) {
   const audit = await auditPage(site.url);
   if (!audit.ok) {
-    console.error(`[deep-check] ${site.name} page audit failed: ${audit.error}`);
+    logger.error("deep-check: page audit failed", { site: site.name, error: audit.error });
     return;
   }
 
@@ -26,7 +27,7 @@ async function runVisualAndVitals(site) {
     try {
       diff = diffPercent(fs.readFileSync(prevShot.path), audit.screenshot);
     } catch (err) {
-      console.error(`[deep-check] ${site.name} visual diff failed: ${err.message}`);
+      logger.error("deep-check: visual diff failed", { site: site.name, error: err.message });
     }
   }
 
@@ -102,12 +103,12 @@ export async function runDeepChecks() {
     try {
       await runVisualAndVitals(site);
     } catch (err) {
-      console.error(`[deep-check] ${site.name} visual/vitals failed:`, err.message);
+      logger.error("deep-check: visual/vitals failed", { site: site.name, error: err.message });
     }
     try {
       await runDomainCheck(site);
     } catch (err) {
-      console.error(`[deep-check] ${site.name} domain check failed:`, err.message);
+      logger.error("deep-check: domain check failed", { site: site.name, error: err.message });
     }
   }
 }

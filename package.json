@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server/index.js",
     "check-once": "node server/index.js --once",
-    "build:dashboard": "npm --prefix dashboard install && npm --prefix dashboard run build"
+    "build:dashboard": "npm --prefix dashboard install && npm --prefix dashboard run build",
+    "test": "node --test server/__tests__/*.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.1",
@@ -18,6 +19,7 @@
     "pixelmatch": "^7.2.0",
     "playwright-core": "^1.61.1",
     "pngjs": "^7.0.0",
+    "qrcode": "^1.5.4",
     "whoiser": "^2.0.0-beta.10"
   }
 }
