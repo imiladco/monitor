@@ -30,7 +30,7 @@ async function checkSiteUptime(site) {
       ? `🟢 برگشت آنلاین (${result.responseMs}ms)`
       : `🔴 از دسترس خارج شد — ${result.error || `HTTP ${result.statusCode}`}`;
     recordEvent(site.id, { type: "uptime_change", title, severity: result.up ? "info" : "critical" });
-    await sendTelegram(`<b>${site.name}</b> ${title}\n${site.url}`);
+    await sendTelegram(`<b>${site.name}</b> ${title}\n${site.url}`, "status");
   }
 
   if (result.up && prev) {
@@ -38,7 +38,7 @@ async function checkSiteUptime(site) {
     if (result.slow && !wasSlow) {
       const title = `🐢 کند شد: ${result.responseMs}ms`;
       recordEvent(site.id, { type: "slow_response", title, severity: "warning" });
-      await sendTelegram(`<b>${site.name}</b> ${title}\n${site.url}`);
+      await sendTelegram(`<b>${site.name}</b> ${title}\n${site.url}`, "performance");
     } else if (!result.slow && wasSlow) {
       recordEvent(site.id, {
         type: "slow_response_recovered",
@@ -62,7 +62,7 @@ async function checkSiteUptime(site) {
     if (checkoutWasUp !== checkoutResult.up) {
       const title = checkoutResult.up ? "🟢 صفحه‌ی چک‌اوت دوباره سالمه" : "🔴 صفحه‌ی چک‌اوت خرابه";
       recordEvent(site.id, { type: "checkout_change", title, severity: checkoutResult.up ? "info" : "critical" });
-      await sendTelegram(`<b>${site.name}</b> ${title}\n${site.checkout_url}`);
+      await sendTelegram(`<b>${site.name}</b> ${title}\n${site.checkout_url}`, "status");
     }
   }
 }
@@ -90,7 +90,7 @@ async function checkSiteSsl(site) {
   if (shouldWarn && !alreadyWarned) {
     const title = `⚠️ گواهی SSL تا ${result.daysLeft} روز دیگه منقضی می‌شه`;
     recordEvent(site.id, { type: "ssl_warning", title, severity: "warning" });
-    await sendTelegram(`<b>${site.name}</b> ${title}`);
+    await sendTelegram(`<b>${site.name}</b> ${title}`, "ssl");
   }
 }
 
@@ -116,7 +116,7 @@ async function sendDailySummary() {
     const sslDays = ssl?.ssl_days_left != null ? `${ssl.ssl_days_left}d` : "?";
     return `${status} <b>${site.name}</b> — ${responseMs}, SSL: ${sslDays}`;
   });
-  if (lines.length) await sendTelegram(`📊 <b>گزارش روزانه</b>\n\n${lines.join("\n")}`);
+  if (lines.length) await sendTelegram(`📊 <b>گزارش روزانه</b>\n\n${lines.join("\n")}`, "status");
 }
 
 export function startScheduler() {

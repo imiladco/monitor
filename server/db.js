@@ -60,6 +60,12 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS telegram_topics (
+  category TEXT PRIMARY KEY,
+  thread_id INTEGER,
+  name TEXT
+);
+
 CREATE TABLE IF NOT EXISTS snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
@@ -108,6 +114,21 @@ export function updateSite(id, { name, url, checkoutUrl }) {
 
 export function deleteSite(id) {
   db.prepare("DELETE FROM sites WHERE id = ?").run(id);
+}
+
+export function getTelegramTopic(category) {
+  return db.prepare("SELECT * FROM telegram_topics WHERE category = ?").get(category);
+}
+
+export function listTelegramTopics() {
+  return db.prepare("SELECT * FROM telegram_topics").all();
+}
+
+export function setTelegramTopic(category, threadId, name) {
+  db.prepare(
+    `INSERT INTO telegram_topics (category, thread_id, name) VALUES (?, ?, ?)
+     ON CONFLICT(category) DO UPDATE SET thread_id = excluded.thread_id, name = excluded.name`
+  ).run(category, threadId, name);
 }
 
 export function getSetting(key, fallback = null) {

@@ -57,6 +57,12 @@ export const api = {
   settings: () => request("/settings"),
   updateSettings: (data) => request("/settings", { method: "PUT", body: JSON.stringify(data) }),
   testTelegram: () => request("/settings/test-telegram", { method: "POST" }),
+  discoverTelegramGroup: () => request("/settings/telegram-discover-group", { method: "POST" }),
+  telegramTopics: () => request("/settings/telegram-topics"),
+  setupTelegramTopics: () => request("/settings/telegram-topics/setup", { method: "POST" }),
+  setTelegramTopic: (category, threadId) =>
+    request(`/settings/telegram-topics/${category}`, { method: "PUT", body: JSON.stringify({ threadId }) }),
+  testTelegramTopic: (category) => request(`/settings/telegram-topics/${category}/test`, { method: "POST" }),
   screenshotUrl: (id, capturedAt) =>
     `/api/sites/${id}/screenshot?t=${encodeURIComponent(capturedAt)}&pw=${encodeURIComponent(getPassword())}`,
 };

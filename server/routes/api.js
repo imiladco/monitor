@@ -1,7 +1,8 @@
 import { Router } from "express";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { sendTelegram } from "../notify/telegram.js";
+import { sendTelegram, callTelegramApi } from "../notify/telegram.js";
+import { CATEGORIES } from "../telegramCategories.js";
 import {
   listSites,
   getSiteById,
@@ -16,6 +17,8 @@ import {
   vitalsHistory,
   getSetting,
   setSetting,
+  listTelegramTopics,
+  setTelegramTopic,
 } from "../db.js";
 
 export const apiRouter = Router();
@@ -75,23 +78,109 @@ apiRouter.get("/settings", (req, res) => {
   res.json({
     telegramBotToken: getSetting("telegram_bot_token", "") ? "••••••••" : "",
     telegramChatId: getSetting("telegram_chat_id", ""),
+    telegramGroupId: getSetting("telegram_group_id", ""),
     hasTelegramBotToken: Boolean(getSetting("telegram_bot_token", "")),
   });
 });
 
 apiRouter.put("/settings", (req, res) => {
-  const { telegramBotToken, telegramChatId } = req.body || {};
+  const { telegramBotToken, telegramChatId, telegramGroupId } = req.body || {};
   if (typeof telegramBotToken === "string" && telegramBotToken && telegramBotToken !== "••••••••") {
     setSetting("telegram_bot_token", telegramBotToken);
   }
   if (typeof telegramChatId === "string") {
     setSetting("telegram_chat_id", telegramChatId);
   }
+  if (typeof telegramGroupId === "string") {
+    setSetting("telegram_group_id", telegramGroupId);
+  }
   res.json({ ok: true });
 });
 
 apiRouter.post("/settings/test-telegram", async (req, res) => {
   const result = await sendTelegram("🔔 پیام تست از Site Monitor — اتصال تلگرام درست کار می‌کنه.");
+  res.json(result);
+});
+
+// Finds the most recent group/supergroup chat the bot has seen a message in
+// (getUpdates only surfaces chats it has interacted with — the user must
+// have added the bot and sent at least one message in the group first).
+apiRouter.post("/settings/telegram-discover-group", async (req, res) => {
+  const result = await callTelegramApi("getUpdates", { limit: 100 });
+  if (!result.ok) return res.json(result);
+
+  const groupUpdate = [...result.result]
+    .reverse()
+    .find((u) => ["group", "supergroup"].includes(u.message?.chat?.type));
+
+  if (!groupUpdate) {
+    return res.json({
+      ok: false,
+      error: "هیچ گروهی پیدا نشد — مطمئن شو ربات رو به گروه اضافه کردی و حداقل یه پیام توی گروه فرستادی",
+    });
+  }
+
+  const chat = groupUpdate.message.chat;
+  res.json({ ok: true, chatId: String(chat.id), title: chat.title });
+});
+
+apiRouter.get("/settings/telegram-topics", (req, res) => {
+  const existing = new Map(listTelegramTopics().map((t) => [t.category, t]));
+  res.json(
+    CATEGORIES.map((c) => ({
+      ...c,
+      threadId: existing.get(c.key)?.thread_id ?? null,
+      name: existing.get(c.key)?.name ?? null,
+    }))
+  );
+});
+
+// Auto-creates a forum topic per category in the configured group. Requires
+// the bot to be an admin with "Manage Topics" rights and the group to have
+// Topics enabled. Skips categories that already have a topic.
+apiRouter.post("/settings/telegram-topics/setup", async (req, res) => {
+  const groupId = getSetting("telegram_group_id", "");
+  if (!groupId) return res.status(400).json({ error: "اول گروه رو تنظیم کن" });
+
+  const existing = new Map(listTelegramTopics().map((t) => [t.category, t]));
+  const results = [];
+
+  for (const category of CATEGORIES) {
+    if (existing.has(category.key)) {
+      results.push({ key: category.key, ok: true, skipped: true });
+      continue;
+    }
+    const created = await callTelegramApi("createForumTopic", {
+      chat_id: groupId,
+      name: `${category.icon} ${category.label}`,
+    });
+    if (created.ok) {
+      setTelegramTopic(category.key, created.result.message_thread_id, category.label);
+      results.push({ key: category.key, ok: true, threadId: created.result.message_thread_id });
+    } else {
+      results.push({ key: category.key, ok: false, error: created.error });
+    }
+  }
+
+  res.json({ results });
+});
+
+apiRouter.put("/settings/telegram-topics/:category", (req, res) => {
+  const category = CATEGORIES.find((c) => c.key === req.params.category);
+  if (!category) return res.status(404).json({ error: "دسته‌بندی نامعتبر" });
+
+  const threadId = Number(req.body?.threadId);
+  if (!Number.isFinite(threadId)) return res.status(400).json({ error: "threadId نامعتبر" });
+
+  setTelegramTopic(category.key, threadId, category.label);
+  res.json({ ok: true });
+});
+
+apiRouter.post("/settings/telegram-topics/:category/test", async (req, res) => {
+  const category = CATEGORIES.find((c) => c.key === req.params.category);
+  if (!category) return res.status(404).json({ error: "دسته‌بندی نامعتبر" });
+
+  const result = await sendTelegram(`${category.icon} پیام تست برای دسته‌ی «${category.label}»`, category.key);
   res.json(result);
 });
 

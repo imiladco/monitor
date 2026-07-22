@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
+import TelegramTopics from "../components/TelegramTopics.jsx";
 
 export default function SettingsPage() {
-  const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "" });
+  const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "", telegramGroupId: "" });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
@@ -11,7 +12,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     api.settings().then((s) => {
-      setForm({ telegramBotToken: s.telegramBotToken, telegramChatId: s.telegramChatId });
+      setForm({
+        telegramBotToken: s.telegramBotToken,
+        telegramChatId: s.telegramChatId,
+        telegramGroupId: s.telegramGroupId,
+      });
       setLoading(false);
     });
   }, []);
@@ -86,6 +91,12 @@ export default function SettingsPage() {
           </p>
         )}
       </div>
+
+      <TelegramTopics
+        groupId={form.telegramGroupId}
+        onGroupIdChange={(v) => setForm({ ...form, telegramGroupId: v })}
+        onGroupIdSaved={(v) => api.updateSettings({ ...form, telegramGroupId: v })}
+      />
 
       <p className="mt-4 max-w-md text-xs text-gray-500">
         با <a className="text-accent" href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a> یه

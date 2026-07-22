@@ -1,9 +1,13 @@
 import { env } from "../config.js";
-import { getSetting } from "../db.js";
+import { getSetting, getTelegramTopic } from "../db.js";
 
-export async function sendTelegram(text) {
+export async function sendTelegram(text, category = null) {
   const botToken = getSetting("telegram_bot_token", env.telegramBotToken);
-  const chatId = getSetting("telegram_chat_id", env.telegramChatId);
+  const groupId = getSetting("telegram_group_id", "");
+  const fallbackChatId = getSetting("telegram_chat_id", env.telegramChatId);
+
+  const chatId = groupId || fallbackChatId;
+  const topic = groupId && category ? getTelegramTopic(category) : null;
 
   if (!botToken || !chatId) {
     console.warn("[telegram] bot token / chat id not set (panel or .env), skipping alert:\n", text);
@@ -21,6 +25,7 @@ export async function sendTelegram(text) {
         text,
         parse_mode: "HTML",
         disable_web_page_preview: true,
+        ...(topic ? { message_thread_id: topic.thread_id } : {}),
       }),
     });
   } catch (err) {
@@ -35,4 +40,20 @@ export async function sendTelegram(text) {
   }
 
   return { ok: true };
+}
+
+export async function callTelegramApi(method, params) {
+  const botToken = getSetting("telegram_bot_token", env.telegramBotToken);
+  if (!botToken) return { ok: false, error: "توکن ربات تنظیم نشده" };
+
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!data.ok) {
+    return { ok: false, error: data.description || `HTTP ${res.status}` };
+  }
+  return { ok: true, result: data.result };
 }
