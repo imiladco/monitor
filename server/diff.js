@@ -85,6 +85,22 @@ export function diffSnapshot(prev, next) {
     }
   }
 
+  if (next.coreIntegrity?.modifiedFiles?.length) {
+    const prevModified = new Set(prev?.coreIntegrity?.modifiedFiles?.map((f) => f.file) || []);
+    const newlyModified = next.coreIntegrity.modifiedFiles.filter((f) => !prevModified.has(f.file));
+    if (newlyModified.length > 0) {
+      events.push({
+        type: "core_integrity",
+        title: `🚨 ${newlyModified.length} فایل هسته‌ی وردپرس دستکاری شده: ${newlyModified
+          .slice(0, 5)
+          .map((f) => f.file)
+          .join(", ")}${newlyModified.length > 5 ? "…" : ""}`,
+        severity: "critical",
+        detail: { files: newlyModified },
+      });
+    }
+  }
+
   if (prev?.dbSizeMb != null && next.dbSizeMb != null && prev.dbSizeMb > 0) {
     const growthPercent = ((next.dbSizeMb - prev.dbSizeMb) / prev.dbSizeMb) * 100;
     if (growthPercent >= env.dbGrowthWarnPercent) {

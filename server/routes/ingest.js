@@ -30,3 +30,23 @@ ingestRouter.post("/ingest", async (req, res) => {
 
   res.json({ ok: true, eventsRecorded: events.length });
 });
+
+// For one-off, time-sensitive alerts the agent detects itself (e.g. brute-force
+// login attempts) that shouldn't wait for the next full snapshot diff.
+ingestRouter.post("/ingest/event", async (req, res) => {
+  const apiKey = req.header("X-Api-Key");
+  if (!apiKey) return res.status(401).json({ error: "missing X-Api-Key header" });
+
+  const site = getSiteByApiKey(apiKey);
+  if (!site) return res.status(401).json({ error: "invalid api key" });
+
+  const { type, title, severity = "warning", detail } = req.body || {};
+  if (!type || !title) return res.status(400).json({ error: "type and title are required" });
+
+  recordEvent(site.id, { type, title, detail, severity, source: "agent" });
+  if (severity === "critical" || severity === "warning") {
+    await sendTelegram(`🛡 <b>${site.name}</b> — ${title}`);
+  }
+
+  res.json({ ok: true });
+});

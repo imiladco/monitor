@@ -57,6 +57,7 @@ function site_monitor_build_snapshot() {
         'plugins' => $plugins,
         'users' => $users_payload,
         'dbSizeMb' => $db_size_mb !== null ? (float) $db_size_mb : null,
+        'coreIntegrity' => get_option('site_monitor_core_integrity', null),
     ];
 }
 
@@ -73,6 +74,92 @@ function site_monitor_send_snapshot() {
         'body' => $body,
     ]);
 }
+
+function site_monitor_send_event($type, $title, $severity = 'warning', $detail = null) {
+    $body = wp_json_encode(compact('type', 'title', 'severity', 'detail'));
+
+    wp_remote_post(SITE_MONITOR_API_URL . '/event', [
+        'timeout' => 10,
+        'blocking' => false,
+        'headers' => [
+            'Content-Type' => 'application/json',
+            'X-Api-Key' => SITE_MONITOR_API_KEY,
+        ],
+        'body' => $body,
+    ]);
+}
+
+/**
+ * Compares core file hashes against the official checksums from
+ * api.wordpress.org to catch modified/backdoored core files. Skips
+ * wp-content since themes/plugins legitimately vary there. Runs once a
+ * day (it's IO heavy) and caches the result for the hourly snapshot.
+ */
+function site_monitor_check_core_integrity() {
+    if (defined('SITE_MONITOR_DISABLE_INTEGRITY_CHECK') && SITE_MONITOR_DISABLE_INTEGRITY_CHECK) {
+        return;
+    }
+
+    global $wp_version;
+    $locale = get_locale();
+    $url = "https://api.wordpress.org/core/checksums/1.0/?version={$wp_version}&locale={$locale}";
+    $response = wp_remote_get($url, ['timeout' => 20]);
+    if (is_wp_error($response)) return;
+
+    $data = json_decode(wp_remote_retrieve_body($response), true);
+    $checksums = $data['checksums'] ?? null;
+    if (!$checksums) return;
+
+    $modified = [];
+    foreach ($checksums as $file => $expected_md5) {
+        if (strpos($file, 'wp-content/') === 0) continue;
+        $path = ABSPATH . $file;
+        if (!file_exists($path)) {
+            $modified[] = ['file' => $file, 'issue' => 'missing'];
+            continue;
+        }
+        if (md5_file($path) !== $expected_md5) {
+            $modified[] = ['file' => $file, 'issue' => 'modified'];
+        }
+        if (count($modified) >= 50) break; // cap payload size
+    }
+
+    update_option('site_monitor_core_integrity', [
+        'modifiedFiles' => $modified,
+        'checkedAt' => current_time('mysql'),
+    ], false);
+}
+
+add_action('site_monitor_daily_integrity', 'site_monitor_check_core_integrity');
+if (!wp_next_scheduled('site_monitor_daily_integrity')) {
+    wp_schedule_event(time(), 'daily', 'site_monitor_daily_integrity');
+}
+
+/**
+ * Brute-force login detection: counts failed logins in a rolling
+ * 15-minute window and alerts once per window if it crosses the
+ * threshold, instead of on every single failed attempt.
+ */
+function site_monitor_track_failed_login($username) {
+    $window = 15 * MINUTE_IN_SECONDS;
+    $threshold = 8;
+
+    $attempts = get_transient('site_monitor_failed_logins') ?: [];
+    $attempts[] = time();
+    $attempts = array_filter($attempts, fn($t) => $t > time() - $window);
+    set_transient('site_monitor_failed_logins', $attempts, $window);
+
+    if (count($attempts) >= $threshold && !get_transient('site_monitor_bruteforce_alerted')) {
+        set_transient('site_monitor_bruteforce_alerted', true, $window);
+        site_monitor_send_event(
+            'brute_force',
+            sprintf('حمله‌ی brute-force به wp-login تشخیص داده شد (%d تلاش ناموفق در ۱۵ دقیقه)', count($attempts)),
+            'critical',
+            ['attempts' => count($attempts), 'lastUsername' => $username]
+        );
+    }
+}
+add_action('wp_login_failed', 'site_monitor_track_failed_login');
 
 // Immediate push right after any core/plugin/theme update.
 add_action('upgrader_process_complete', 'site_monitor_send_snapshot', 10, 0);

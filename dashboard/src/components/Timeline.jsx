@@ -19,6 +19,8 @@ const typeIcon = {
   slow_response: "🐢",
   slow_response_recovered: "⚡️",
   ssl_warning: "🔒",
+  core_integrity: "🚨",
+  brute_force: "🛡️",
 };
 
 function formatTime(iso) {
