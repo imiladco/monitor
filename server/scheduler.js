@@ -4,10 +4,23 @@ import { checkUptime } from "./checks/uptime.js";
 import { checkSsl } from "./checks/ssl.js";
 import { checkPort } from "./checks/port.js";
 import { sendTelegram, notifySite } from "./notify/telegram.js";
-import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks, recoverStuckCommands, pruneExpiredSessions } from "./db.js";
+import {
+  listSites,
+  recordCheck,
+  latestCheck,
+  recordEvent,
+  listAllPortChecks,
+  recoverStuckCommands,
+  pruneExpiredSessions,
+  getSiteById,
+  enqueueJob,
+  recoverStuckJobs,
+  pruneFinishedJobs,
+} from "./db.js";
 import { processCheckResult } from "./incident/index.js";
 import { runPool } from "./pool.js";
-import { runDeepChecks } from "./deepChecks.js";
+import { runDeepCheckForSite } from "./deepChecks.js";
+import { registerJob, startWorkers } from "./jobs/queue.js";
 import { backupDatabase } from "./backup.js";
 import { runVulnerabilityScan } from "./vuln/index.js";
 import { evaluatePendingVerdicts } from "./fleet/index.js";
@@ -171,11 +184,26 @@ async function sendDailySummary() {
 }
 
 export function startScheduler() {
+  // Heavy browser work runs through the durable job queue: one deep-check job
+  // per site, processed under a low concurrency cap, retried with backoff, and
+  // recovered after a restart.
+  registerJob(
+    "deep_check",
+    async ({ siteId }) => {
+      const site = getSiteById(siteId);
+      if (site && !site.paused) await runDeepCheckForSite(site);
+    },
+    { concurrency: env.browserConcurrency, timeoutMs: 120000, backoffBaseSeconds: 60 }
+  );
+  startWorkers();
+
   cron.schedule(`*/${env.checkIntervalMinutes} * * * *`, runChecks);
   cron.schedule(`0 ${env.dailySummaryHour} * * *`, sendDailySummary);
-  cron.schedule(`0 ${env.deepCheckHour} * * *`, () =>
-    runDeepChecks().catch((err) => logger.error("deep-check: run failed", { error: err.message }))
-  );
+  cron.schedule(`0 ${env.deepCheckHour} * * *`, () => {
+    for (const site of listSites().filter((s) => !s.paused)) {
+      enqueueJob({ type: "deep_check", payload: { siteId: site.id }, maxAttempts: 2 });
+    }
+  });
   cron.schedule(`0 ${env.backupHour} * * *`, async () => {
     await backupDatabase();
     pruneOldLogs();
@@ -194,6 +222,9 @@ export function startScheduler() {
   cron.schedule("*/5 * * * *", () => {
     const recovered = recoverStuckCommands();
     if (recovered) logger.warn("commands: requeued stuck running commands", { count: recovered });
+    const recoveredJobs = recoverStuckJobs();
+    if (recoveredJobs) logger.warn("jobs: requeued stuck running jobs", { count: recoveredJobs });
+    pruneFinishedJobs();
   });
   logger.info("scheduler: started", {
     checkIntervalMinutes: env.checkIntervalMinutes,

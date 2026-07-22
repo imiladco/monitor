@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { aggregateUptimeDaily, dbFileSizeBytes, vacuum } from "./db.js";
+import { aggregateUptimeDaily, dbFileSizeBytes, vacuum, jobStats } from "./db.js";
 import { latestBackupInfo, verifyLatestBackup } from "./backup.js";
 import { sendTelegram } from "./notify/telegram.js";
 import { logger } from "./logger.js";
@@ -33,6 +33,7 @@ export function systemStatus() {
     diskWarnMb: DISK_WARN_MB,
     lastBackupAt: backup?.at ?? null,
     lastBackupSizeMb: backup?.sizeMb ?? null,
+    jobs: jobStats(),
   };
 }
 

@@ -24,6 +24,8 @@ export const env = {
   // sequential). Keeps big fleets from taking minutes per cycle.
   uptimeConcurrency: Number(process.env.UPTIME_CONCURRENCY || 8),
   portConcurrency: Number(process.env.PORT_CONCURRENCY || 10),
+  // Browser jobs (screenshots/vitals) are heavy — keep this low.
+  browserConcurrency: Number(process.env.BROWSER_CONCURRENCY || 1),
   incidentConfirmChecks: Number(process.env.INCIDENT_CONFIRM_CHECKS || 2),
   incidentFlapWindowMin: Number(process.env.INCIDENT_FLAP_WINDOW_MIN || 30),
   incidentFlapThreshold: Number(process.env.INCIDENT_FLAP_THRESHOLD || 3),

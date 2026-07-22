@@ -99,17 +99,19 @@ async function runDomainCheck(site) {
   }
 }
 
+// Deep check for a single site: visual/vitals audit + domain expiry. Used both
+// by the job worker (one job per site) and the direct runDeepChecks() path.
+export async function runDeepCheckForSite(site) {
+  await runVisualAndVitals(site);
+  await runDomainCheck(site);
+}
+
 export async function runDeepChecks() {
   for (const site of listSites().filter((s) => !s.paused)) {
     try {
-      await runVisualAndVitals(site);
+      await runDeepCheckForSite(site);
     } catch (err) {
-      logger.error("deep-check: visual/vitals failed", { site: site.name, error: err.message });
-    }
-    try {
-      await runDomainCheck(site);
-    } catch (err) {
-      logger.error("deep-check: domain check failed", { site: site.name, error: err.message });
+      logger.error("deep-check: failed", { site: site.name, error: err.message });
     }
   }
 }
