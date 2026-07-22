@@ -1,15 +1,19 @@
 {
   "name": "wp-site-monitor",
   "version": "1.0.0",
-  "description": "Uptime, SSL and response-time monitor for WordPress/WooCommerce sites with Telegram alerts",
+  "description": "Uptime, SSL, security and Time Machine monitor for WordPress/WooCommerce sites with a live dashboard and Telegram alerts",
   "type": "module",
-  "main": "src/index.js",
+  "main": "server/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "check-once": "node src/index.js --once"
+    "start": "node server/index.js",
+    "check-once": "node server/index.js --once",
+    "build:dashboard": "npm --prefix dashboard install && npm --prefix dashboard run build"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.1",
+    "cors": "^2.8.6",
     "dotenv": "^16.4.5",
+    "express": "^5.2.1",
     "node-cron": "^3.0.3"
   }
 }
