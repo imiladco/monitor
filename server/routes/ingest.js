@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getSiteByApiKey, latestSnapshot, saveSnapshot, recordEvent } from "../db.js";
 import { diffSnapshot } from "../diff.js";
+import { validateSnapshot } from "../validateSnapshot.js";
 import { notifySite } from "../notify/telegram.js";
 import { categoryForEventType } from "../telegramCategories.js";
 import { onPluginUpdate } from "../fleet/index.js";
@@ -14,9 +15,9 @@ ingestRouter.post("/ingest", async (req, res) => {
   const site = getSiteByApiKey(apiKey);
   if (!site) return res.status(401).json({ error: "invalid api key" });
 
-  const snapshot = req.body;
-  if (!snapshot || typeof snapshot !== "object") {
-    return res.status(400).json({ error: "invalid snapshot payload" });
+  const { ok, error, snapshot } = validateSnapshot(req.body);
+  if (!ok) {
+    return res.status(400).json({ error });
   }
 
   const prev = latestSnapshot(site.id);

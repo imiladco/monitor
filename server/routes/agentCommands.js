@@ -49,6 +49,10 @@ agentCommandsRouter.post("/agent/commands/:id/result", (req, res) => {
   const { status, result } = req.body || {};
   if (!["done", "failed"].includes(status)) return res.status(400).json({ error: "status must be done or failed" });
 
-  completeCommand(req.params.id, status, result);
+  const changed = completeCommand(Number(req.params.id), site.id, status, result);
+  if (changed !== 1) {
+    // not this site's command, or not currently running
+    return res.status(404).json({ error: "command not found for this site" });
+  }
   res.json({ ok: true });
 });

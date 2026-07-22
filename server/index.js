@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
 import { env } from "./config.js";
@@ -20,8 +19,10 @@ const VERSION = JSON.parse(fs.readFileSync(new URL("../package.json", import.met
 const startedAt = Date.now();
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+// No CORS: the dashboard is served from the same origin as the API, and the
+// WordPress agent talks to it server-to-server (not from a browser), so no
+// cross-origin access is needed. A private admin panel shouldn't invite it.
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (req, res) => {
   res.json({
