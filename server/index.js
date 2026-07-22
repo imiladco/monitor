@@ -7,6 +7,7 @@ import { seedSitesFromConfig } from "./seed.js";
 import { apiRouter } from "./routes/api.js";
 import { ingestRouter } from "./routes/ingest.js";
 import { authRouter } from "./routes/auth.js";
+import { publicStatusRouter } from "./routes/publicStatus.js";
 import { requireAdmin } from "./auth.js";
 import { runChecks, startScheduler } from "./scheduler.js";
 
@@ -16,6 +17,7 @@ app.use(express.json({ limit: "2mb" }));
 
 app.use("/api/auth", authRouter);
 app.use("/api", ingestRouter); // agent snapshots/events authenticate with their own per-site key
+app.use("/api", publicStatusRouter); // status page authenticates via its own token in the URL
 app.use("/api", requireAdmin, apiRouter);
 
 const dashboardDist = path.resolve("dashboard/dist");

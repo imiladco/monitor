@@ -9,6 +9,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [statusToken, setStatusToken] = useState(null);
+  const [copiedStatusLink, setCopiedStatusLink] = useState(false);
 
   useEffect(() => {
     api.settings().then((s) => {
@@ -19,7 +21,16 @@ export default function SettingsPage() {
       });
       setLoading(false);
     });
+    api.statusPage().then((s) => setStatusToken(s.token));
   }, []);
+
+  const statusPageUrl = statusToken ? `${window.location.origin}/#/status/${statusToken}` : "";
+
+  async function regenerateStatusPage() {
+    if (!confirm("لینک قبلی پیج وضعیت دیگه کار نمی‌کنه. مطمئنی؟")) return;
+    const { token } = await api.regenerateStatusPage();
+    setStatusToken(token);
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -90,6 +101,36 @@ export default function SettingsPage() {
             {testResult.ok ? "✅ پیام تست ارسال شد — چک کن توی تلگرام رسیده باشه" : `❌ ${testResult.error}`}
           </p>
         )}
+      </div>
+
+      <div className="mt-4 max-w-md rounded-2xl border border-border bg-panel p-6">
+        <h3 className="mb-1 font-medium text-gray-100">صفحه‌ی وضعیت عمومی</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          یه لینک بدون نیاز به رمز، فقط برای سایت‌هایی که «نمایش عمومی» روشونه (از صفحه‌ی هر سایت فعالش کن).
+        </p>
+        {statusPageUrl && (
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 break-all rounded bg-panel2 px-2 py-1 text-xs text-gray-300" dir="ltr">
+              {statusPageUrl}
+            </code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(statusPageUrl);
+                setCopiedStatusLink(true);
+                setTimeout(() => setCopiedStatusLink(false), 1500);
+              }}
+              className="shrink-0 rounded-md bg-panel2 px-2 py-1 text-xs text-gray-300 hover:bg-border"
+            >
+              {copiedStatusLink ? "کپی شد ✓" : "کپی"}
+            </button>
+          </div>
+        )}
+        <button
+          onClick={regenerateStatusPage}
+          className="mt-3 rounded-lg bg-panel2 px-3 py-1.5 text-xs text-gray-300 hover:bg-border"
+        >
+          ساخت لینک جدید (لینک قبلی غیرفعال می‌شه)
+        </button>
       </div>
 
       <TelegramTopics

@@ -26,7 +26,7 @@ export default function SiteCard({ site }) {
           <h3 className="font-semibold text-gray-100">{site.name}</h3>
         </div>
         <span className="text-xs text-gray-500">
-          {site.up === null ? "بدون داده" : site.up ? "آنلاین" : "آفلاین"}
+          {site.paused ? "⏸ مکث" : site.up === null ? "بدون داده" : site.up ? "آنلاین" : "آفلاین"}
         </span>
       </div>
       <p className="mt-1 truncate text-xs text-gray-500" dir="ltr">

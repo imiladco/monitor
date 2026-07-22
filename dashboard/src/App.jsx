@@ -3,9 +3,10 @@ import { Routes, Route, Link } from "react-router-dom";
 import SitesList from "./pages/SitesList.jsx";
 import SiteDetail from "./pages/SiteDetail.jsx";
 import SettingsPage from "./pages/Settings.jsx";
+import StatusPage from "./pages/StatusPage.jsx";
 import Login, { isLoggedIn } from "./components/Login.jsx";
 
-export default function App() {
+function AdminApp() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn());
 
   useEffect(() => {
@@ -38,5 +39,14 @@ export default function App() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/status/:token" element={<StatusPage />} />
+      <Route path="/*" element={<AdminApp />} />
+    </Routes>
   );
 }

@@ -12,7 +12,7 @@ function hostnameOf(url) {
 
 async function checkSiteUptime(site) {
   const prev = latestCheck(site.id, "uptime");
-  const result = await checkUptime(site.url);
+  const result = await checkUptime(site.url, { keyword: site.keyword, keywordMode: site.keyword_mode });
   recordCheck(site.id, {
     type: "uptime",
     ok: result.up,
@@ -95,7 +95,7 @@ async function checkSiteSsl(site) {
 }
 
 export async function runChecks() {
-  const sites = listSites();
+  const sites = listSites().filter((s) => !s.paused);
   for (const site of sites) {
     try {
       await checkSiteUptime(site);
@@ -107,7 +107,7 @@ export async function runChecks() {
 }
 
 async function sendDailySummary() {
-  const sites = listSites();
+  const sites = listSites().filter((s) => !s.paused);
   const lines = sites.map((site) => {
     const uptime = latestCheck(site.id, "uptime");
     const ssl = latestCheck(site.id, "ssl");

@@ -75,6 +75,21 @@ CREATE TABLE IF NOT EXISTS snapshots (
 CREATE INDEX IF NOT EXISTS idx_snapshots_site_time ON snapshots(site_id, captured_at);
 `);
 
+// Lightweight migration: add columns that didn't exist in earlier releases
+// without wiping existing installs' data.
+const existingSiteColumns = new Set(db.prepare("PRAGMA table_info(sites)").all().map((c) => c.name));
+const siteColumnsToAdd = {
+  paused: "INTEGER NOT NULL DEFAULT 0",
+  keyword: "TEXT",
+  keyword_mode: "TEXT NOT NULL DEFAULT 'present'",
+  public: "INTEGER NOT NULL DEFAULT 0",
+};
+for (const [column, definition] of Object.entries(siteColumnsToAdd)) {
+  if (!existingSiteColumns.has(column)) {
+    db.exec(`ALTER TABLE sites ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 export function upsertSite({ name, url, checkoutUrl, apiKey }) {
   const existing = db.prepare("SELECT * FROM sites WHERE url = ?").get(url);
   if (existing) {
@@ -95,25 +110,50 @@ export function listSites() {
   return db.prepare("SELECT * FROM sites ORDER BY name").all();
 }
 
-export function createSite({ name, url, checkoutUrl, apiKey }) {
+export function createSite({ name, url, checkoutUrl, apiKey, keyword, keywordMode }) {
   const info = db
-    .prepare("INSERT INTO sites (name, url, checkout_url, api_key) VALUES (?, ?, ?, ?)")
-    .run(name, url, checkoutUrl || null, apiKey);
+    .prepare(
+      "INSERT INTO sites (name, url, checkout_url, api_key, keyword, keyword_mode) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    .run(name, url, checkoutUrl || null, apiKey, keyword || null, keywordMode || "present");
   return db.prepare("SELECT * FROM sites WHERE id = ?").get(info.lastInsertRowid);
 }
 
-export function updateSite(id, { name, url, checkoutUrl }) {
-  db.prepare("UPDATE sites SET name = ?, url = ?, checkout_url = ? WHERE id = ?").run(
-    name,
-    url,
-    checkoutUrl || null,
-    id
-  );
+export function updateSite(id, { name, url, checkoutUrl, keyword, keywordMode }) {
+  db.prepare(
+    "UPDATE sites SET name = ?, url = ?, checkout_url = ?, keyword = ?, keyword_mode = ? WHERE id = ?"
+  ).run(name, url, checkoutUrl || null, keyword || null, keywordMode || "present", id);
   return db.prepare("SELECT * FROM sites WHERE id = ?").get(id);
 }
 
 export function deleteSite(id) {
   db.prepare("DELETE FROM sites WHERE id = ?").run(id);
+}
+
+export function setSitePaused(id, paused) {
+  db.prepare("UPDATE sites SET paused = ? WHERE id = ?").run(paused ? 1 : 0, id);
+}
+
+export function setSitePublic(id, isPublic) {
+  db.prepare("UPDATE sites SET public = ? WHERE id = ?").run(isPublic ? 1 : 0, id);
+}
+
+export function listPublicSites() {
+  return db.prepare("SELECT * FROM sites WHERE public = 1 ORDER BY name").all();
+}
+
+export function uptimePercent(siteId, days) {
+  const row = db
+    .prepare(
+      `SELECT
+         COUNT(*) AS total,
+         SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS up
+       FROM checks
+       WHERE site_id = ? AND type = 'uptime' AND checked_at >= datetime('now', ?)`
+    )
+    .get(siteId, `-${days} days`);
+  if (!row || !row.total) return null;
+  return Number(((row.up / row.total) * 100).toFixed(2));
 }
 
 export function getTelegramTopic(category) {

@@ -56,6 +56,16 @@ export default function SiteDetail() {
     navigate("/");
   }
 
+  async function togglePause() {
+    await api.setPaused(site.id, !site.paused);
+    setSite(await api.site(id));
+  }
+
+  async function togglePublic() {
+    await api.setPublic(site.id, !site.public);
+    setSite(await api.site(id));
+  }
+
   return (
     <div>
       <Link to="/" className="text-sm text-gray-500 hover:text-gray-300">
@@ -69,10 +79,25 @@ export default function SiteDetail() {
             {site.url}
           </a>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {site.paused && (
+            <span className="rounded-lg bg-warn/20 px-2 py-1 text-xs text-warn">⏸ مکث شده</span>
+          )}
+          <button onClick={togglePublic} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border">
+            {site.public ? "✓ نمایش عمومی" : "نمایش عمومی خاموشه"}
+          </button>
+          <button onClick={togglePause} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border">
+            {site.paused ? "▶ ادامه" : "⏸ مکث"}
+          </button>
           <button
             onClick={() => {
-              setEditForm({ name: site.name, url: site.url, checkoutUrl: site.checkoutUrl || "" });
+              setEditForm({
+                name: site.name,
+                url: site.url,
+                checkoutUrl: site.checkoutUrl || "",
+                keyword: site.keyword || "",
+                keywordMode: site.keywordMode || "present",
+              });
               setEditing(true);
             }}
             className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border"
@@ -109,6 +134,22 @@ export default function SiteDetail() {
               className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
             />
           </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <input
+              value={editForm.keyword}
+              onChange={(e) => setEditForm({ ...editForm, keyword: e.target.value })}
+              placeholder="کلیدواژه (اختیاری، مثلاً «افزودن به سبد خرید»)"
+              className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent sm:col-span-2"
+            />
+            <select
+              value={editForm.keywordMode}
+              onChange={(e) => setEditForm({ ...editForm, keywordMode: e.target.value })}
+              className="rounded-lg border border-border bg-panel2 px-3 py-2 text-gray-100 outline-none focus:border-accent"
+            >
+              <option value="present">باید توی صفحه باشه</option>
+              <option value="absent">نباید توی صفحه باشه</option>
+            </select>
+          </div>
           {saveError && <p className="mt-2 text-sm text-bad">{saveError}</p>}
           <div className="mt-3 flex gap-2">
             <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white">
@@ -134,7 +175,13 @@ export default function SiteDetail() {
         <ResponseTimeChart points={checks || []} />
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mt-6 grid grid-cols-3 gap-4">
+        <Stat label="آپ‌تایم ۷ روزه" value={site.uptime7d != null ? `${site.uptime7d}٪` : "-"} />
+        <Stat label="آپ‌تایم ۳۰ روزه" value={site.uptime30d != null ? `${site.uptime30d}٪` : "-"} />
+        <Stat label="آپ‌تایم ۹۰ روزه" value={site.uptime90d != null ? `${site.uptime90d}٪` : "-"} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="وضعیت" value={lastCheck ? (lastCheck.ok ? "آنلاین" : "آفلاین") : "-"} />
         <Stat label="سرعت پاسخ" value={lastCheck?.response_ms != null ? `${lastCheck.response_ms}ms` : "-"} />
         <Stat label="وردپرس" value={agent?.wpVersion || "متصل نیست"} />

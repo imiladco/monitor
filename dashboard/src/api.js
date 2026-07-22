@@ -65,4 +65,15 @@ export const api = {
   testTelegramTopic: (category) => request(`/settings/telegram-topics/${category}/test`, { method: "POST" }),
   screenshotUrl: (id, capturedAt) =>
     `/api/sites/${id}/screenshot?t=${encodeURIComponent(capturedAt)}&pw=${encodeURIComponent(getPassword())}`,
+  setPaused: (id, paused) => request(`/sites/${id}/pause`, { method: "PATCH", body: JSON.stringify({ paused }) }),
+  setPublic: (id, isPublic) =>
+    request(`/sites/${id}/public`, { method: "PATCH", body: JSON.stringify({ public: isPublic }) }),
+  statusPage: () => request("/settings/status-page"),
+  regenerateStatusPage: () => request("/settings/status-page/regenerate", { method: "POST" }),
 };
+
+export async function fetchPublicStatus(token) {
+  const res = await fetch(`/api/public/status/${token}`);
+  if (!res.ok) throw new Error("پیج وضعیت پیدا نشد");
+  return res.json();
+}

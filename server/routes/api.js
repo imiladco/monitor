@@ -9,6 +9,9 @@ import {
   createSite,
   updateSite,
   deleteSite,
+  setSitePaused,
+  setSitePublic,
+  uptimePercent,
   latestCheck,
   checkHistory,
   eventTimeline,
@@ -36,34 +39,43 @@ apiRouter.get("/sites", (req, res) => {
       sslDaysLeft: ssl?.ssl_days_left ?? null,
       lastCheckedAt: uptime?.checked_at ?? null,
       recentChecks: checkHistory(site.id, "uptime", 30).reverse(),
+      paused: Boolean(site.paused),
+      public: Boolean(site.public),
     };
   });
   res.json(sites);
 });
 
 apiRouter.post("/sites", (req, res) => {
-  const { name, url, checkoutUrl } = req.body || {};
+  const { name, url, checkoutUrl, keyword, keywordMode } = req.body || {};
   if (!name || !url) return res.status(400).json({ error: "name and url are required" });
   try {
     new URL(url);
   } catch {
     return res.status(400).json({ error: "invalid url" });
   }
-  const site = createSite({ name, url, checkoutUrl, apiKey: crypto.randomBytes(24).toString("hex") });
+  const site = createSite({
+    name,
+    url,
+    checkoutUrl,
+    keyword,
+    keywordMode,
+    apiKey: crypto.randomBytes(24).toString("hex"),
+  });
   res.status(201).json({ id: site.id });
 });
 
 apiRouter.put("/sites/:id", (req, res) => {
   const site = getSiteById(req.params.id);
   if (!site) return res.status(404).json({ error: "not found" });
-  const { name, url, checkoutUrl } = req.body || {};
+  const { name, url, checkoutUrl, keyword, keywordMode } = req.body || {};
   if (!name || !url) return res.status(400).json({ error: "name and url are required" });
   try {
     new URL(url);
   } catch {
     return res.status(400).json({ error: "invalid url" });
   }
-  updateSite(site.id, { name, url, checkoutUrl });
+  updateSite(site.id, { name, url, checkoutUrl, keyword, keywordMode });
   res.json({ ok: true });
 });
 
@@ -71,6 +83,20 @@ apiRouter.delete("/sites/:id", (req, res) => {
   const site = getSiteById(req.params.id);
   if (!site) return res.status(404).json({ error: "not found" });
   deleteSite(site.id);
+  res.json({ ok: true });
+});
+
+apiRouter.patch("/sites/:id/pause", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  setSitePaused(site.id, Boolean(req.body?.paused));
+  res.json({ ok: true });
+});
+
+apiRouter.patch("/sites/:id/public", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  setSitePublic(site.id, Boolean(req.body?.public));
   res.json({ ok: true });
 });
 
@@ -195,10 +221,17 @@ apiRouter.get("/sites/:id", (req, res) => {
     name: site.name,
     url: site.url,
     checkoutUrl: site.checkout_url,
+    keyword: site.keyword,
+    keywordMode: site.keyword_mode,
+    paused: Boolean(site.paused),
+    public: Boolean(site.public),
     apiKey: site.api_key,
     agent: snapshot?.data ?? null,
     agentLastSeen: snapshot?.captured_at ?? null,
     domainDaysLeft: domain?.ssl_days_left ?? null,
+    uptime7d: uptimePercent(site.id, 7),
+    uptime30d: uptimePercent(site.id, 30),
+    uptime90d: uptimePercent(site.id, 90),
     screenshot: screenshot
       ? {
           capturedAt: screenshot.captured_at,
@@ -230,4 +263,23 @@ apiRouter.get("/sites/:id/checks", (req, res) => {
 apiRouter.get("/sites/:id/timeline", (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 200, 500);
   res.json(eventTimeline(req.params.id, limit));
+});
+
+function ensureStatusPageToken() {
+  let token = getSetting("status_page_token", "");
+  if (!token) {
+    token = crypto.randomBytes(16).toString("hex");
+    setSetting("status_page_token", token);
+  }
+  return token;
+}
+
+apiRouter.get("/settings/status-page", (req, res) => {
+  res.json({ token: ensureStatusPageToken() });
+});
+
+apiRouter.post("/settings/status-page/regenerate", (req, res) => {
+  const token = crypto.randomBytes(16).toString("hex");
+  setSetting("status_page_token", token);
+  res.json({ token });
 });
