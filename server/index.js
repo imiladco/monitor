@@ -12,6 +12,7 @@ import { agentCommandsRouter } from "./routes/agentCommands.js";
 import { requireAdmin } from "./auth.js";
 import { runChecks, startScheduler } from "./scheduler.js";
 import { listSites, lastCheckTimestamp, getSetting } from "./db.js";
+import { seedLocalVulnerabilities, runVulnerabilityScan } from "./vuln/index.js";
 import { logger, pruneOldLogs } from "./logger.js";
 
 const VERSION = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url))).version;
@@ -56,6 +57,7 @@ if (fs.existsSync(dashboardDist)) {
 async function main() {
   pruneOldLogs();
   seedSitesFromConfig();
+  seedLocalVulnerabilities();
 
   const once = process.argv.includes("--once");
   await runChecks();
@@ -64,6 +66,8 @@ async function main() {
   }
 
   startScheduler();
+  // run one scan shortly after boot so the UI isn't empty until VULN_SYNC_HOUR
+  runVulnerabilityScan().catch((err) => logger.error("vuln: initial scan failed", { error: err.message }));
   app.listen(env.port, () => {
     logger.info("server: listening", { port: env.port, version: VERSION });
     if (!fs.existsSync(dashboardDist)) {

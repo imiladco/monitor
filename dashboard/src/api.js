@@ -100,6 +100,13 @@ export const api = {
   },
   brandingSettings: () => request("/settings/branding"),
   updateBranding: (data) => request("/settings/branding", { method: "PUT", body: JSON.stringify(data) }),
+  vulnerabilities: () => request("/vulnerabilities"),
+  siteVulnerabilities: (siteId) => request(`/sites/${siteId}/vulnerabilities`),
+  addVulnerability: (data) => request("/vulnerabilities", { method: "POST", body: JSON.stringify(data) }),
+  deleteVulnerability: (id) => request(`/vulnerabilities/${id}`, { method: "DELETE" }),
+  resolveSiteVulnerability: (siteId, vulnId) =>
+    request(`/sites/${siteId}/vulnerabilities/${vulnId}/resolve`, { method: "POST" }),
+  rescanVulnerabilities: () => request("/vulnerabilities/scan", { method: "POST" }),
 };
 
 export async function fetchPublicStatus(token) {

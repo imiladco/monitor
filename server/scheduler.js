@@ -7,6 +7,7 @@ import { sendTelegram, notifySite } from "./notify/telegram.js";
 import { listSites, recordCheck, latestCheck, recordEvent, listAllPortChecks } from "./db.js";
 import { runDeepChecks } from "./deepChecks.js";
 import { backupDatabase } from "./backup.js";
+import { runVulnerabilityScan } from "./vuln/index.js";
 import { pruneOldLogs } from "./logger.js";
 import { logger } from "./logger.js";
 
@@ -157,6 +158,9 @@ export function startScheduler() {
     backupDatabase();
     pruneOldLogs();
   });
+  cron.schedule(`0 ${env.vulnSyncHour} * * *`, () =>
+    runVulnerabilityScan().catch((err) => logger.error("vuln: scan failed", { error: err.message }))
+  );
   logger.info("scheduler: started", {
     checkIntervalMinutes: env.checkIntervalMinutes,
     dailySummaryHour: env.dailySummaryHour,

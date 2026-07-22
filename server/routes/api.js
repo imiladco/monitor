@@ -34,7 +34,12 @@ import {
   downtimeIncidents,
   createCommand,
   listCommands,
+  upsertVulnerability,
+  deleteVulnerability,
+  resolveSiteVulnerability,
+  activeSiteVulnerabilities,
 } from "../db.js";
+import { fleetVulnerabilities, runVulnerabilityScan } from "../vuln/index.js";
 
 export const apiRouter = Router();
 
@@ -438,6 +443,59 @@ function csvEscape(value) {
   const str = String(value ?? "");
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
+
+/* --- Vulnerabilities (v2 phase A) --- */
+
+apiRouter.get("/vulnerabilities", (req, res) => {
+  res.json(fleetVulnerabilities());
+});
+
+apiRouter.get("/sites/:id/vulnerabilities", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  res.json(activeSiteVulnerabilities(site.id));
+});
+
+// Manual entry — the competitive-differentiator path for Iranian-market
+// plugins Patchstack/Wordfence don't cover. Stored as source='manual'.
+apiRouter.post("/vulnerabilities", (req, res) => {
+  const { pluginSlug, affectedVersions, fixedIn, severity, title, description, cveId, referenceUrl } = req.body || {};
+  if (!pluginSlug || !affectedVersions || !title) {
+    return res.status(400).json({ error: "pluginSlug، affectedVersions و title لازمن" });
+  }
+  const vuln = upsertVulnerability({
+    source: "manual",
+    source_id: `manual-${crypto.randomBytes(8).toString("hex")}`,
+    plugin_slug: pluginSlug,
+    affected_versions: affectedVersions,
+    fixed_in: fixedIn || null,
+    severity: severity || "medium",
+    title,
+    description: description || null,
+    cve_id: cveId || null,
+    reference_url: referenceUrl || null,
+  });
+  res.status(201).json(vuln);
+});
+
+apiRouter.delete("/vulnerabilities/:id", (req, res) => {
+  deleteVulnerability(req.params.id);
+  res.json({ ok: true });
+});
+
+// Mark a specific site's finding resolved (false positive). Takes the
+// vulnerability id; scoped to the site.
+apiRouter.post("/sites/:id/vulnerabilities/:vulnId/resolve", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  resolveSiteVulnerability(site.id, Number(req.params.vulnId));
+  res.json({ ok: true });
+});
+
+apiRouter.post("/vulnerabilities/scan", async (req, res) => {
+  await runVulnerabilityScan();
+  res.json({ ok: true });
+});
 
 function ensureStatusPageToken() {
   let token = getSetting("status_page_token", "");

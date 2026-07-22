@@ -1,0 +1,4 @@
+[
+  {"source_id":"local-woocommerce-sqli-2021","pluginSlug":"woocommerce","affectedVersions":">= 3.3 <= 5.5","fixedIn":"5.5.1","severity":"critical","title":"WooCommerce — SQL Injection","cveId":"CVE-2021-32789","referenceUrl":"https://nvd.nist.gov/vuln/detail/CVE-2021-32789"},
+  {"source_id":"local-elementor-rce-2022","pluginSlug":"elementor","affectedVersions":">= 3.6.0 < 3.6.3","fixedIn":"3.6.3","severity":"high","title":"Elementor — RCE","cveId":"CVE-2022-1329"}
+]

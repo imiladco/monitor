@@ -16,4 +16,9 @@ export const env = {
   lcpWarnMs: Number(process.env.LCP_WARN_MS || 4000),
   domainWarnDays: Number(process.env.DOMAIN_WARN_DAYS || 30),
   backupHour: Number(process.env.BACKUP_HOUR ?? 4),
+  vulnSyncEnabled: process.env.VULN_SYNC_ENABLED !== "false",
+  vulnSyncHour: Number(process.env.VULN_SYNC_HOUR ?? 5),
+  vulnAlertMinSeverity: process.env.VULN_ALERT_MIN_SEVERITY || "high",
+  externalVulnFeedUrl: process.env.EXTERNAL_VULN_FEED_URL || "",
+  externalVulnFeedKey: process.env.EXTERNAL_VULN_FEED_KEY || "",
 };
