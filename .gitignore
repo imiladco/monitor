@@ -5,3 +5,4 @@ data/*
 config/sites.json
 dashboard/dist/
 wp-agent/*.zip
+.shot.mjs
