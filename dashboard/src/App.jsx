@@ -10,6 +10,7 @@ import { api } from "./api.js";
 import { useBranding } from "./useBranding.js";
 import { ToastProvider } from "./components/Toast.jsx";
 import { ConfirmProvider } from "./components/ConfirmDialog.jsx";
+import CommandPalette from "./components/CommandPalette.jsx";
 
 function AdminApp() {
   // null = still checking the session cookie, then true/false.
@@ -39,6 +40,7 @@ function AdminApp() {
   return (
     <ToastProvider>
       <ConfirmProvider>
+        <CommandPalette />
         <div className="min-h-screen bg-canvas">
           <header className="border-b border-border bg-panel/60 backdrop-blur">
             <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
