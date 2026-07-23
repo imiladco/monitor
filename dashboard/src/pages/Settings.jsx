@@ -13,7 +13,8 @@ import { useToast } from "../components/Toast.jsx";
 export default function SettingsPage() {
   const confirm = useConfirm();
   const toast = useToast();
-  const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "", telegramGroupId: "" });
+  const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "", telegramGroupId: "", webhookUrl: "" });
+  const [webhookTest, setWebhookTest] = useState(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
@@ -27,6 +28,7 @@ export default function SettingsPage() {
         telegramBotToken: s.telegramBotToken,
         telegramChatId: s.telegramChatId,
         telegramGroupId: s.telegramGroupId,
+        webhookUrl: s.webhookUrl || "",
       });
       setLoading(false);
     });
@@ -68,6 +70,16 @@ export default function SettingsPage() {
     }
   }
 
+  async function testWebhook() {
+    setWebhookTest(null);
+    try {
+      await api.updateSettings(form); // save the URL first so the test uses it
+      setWebhookTest(await api.testWebhook());
+    } catch (err) {
+      setWebhookTest({ ok: false, error: err.message });
+    }
+  }
+
   if (loading) return <div className="text-gray-500">در حال بارگذاری…</div>;
 
   return (
@@ -76,6 +88,40 @@ export default function SettingsPage() {
         ← بازگشت به لیست سایت‌ها
       </Link>
       <h2 className="mb-6 mt-3 text-lg font-semibold text-gray-100">تنظیمات</h2>
+
+      <div className="mb-4 max-w-md rounded-2xl border border-border bg-panel p-6">
+        <h3 className="mb-1 font-medium text-gray-100">Webhook عمومی</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          هر هشدار به‌صورت JSON به این آدرس هم POST می‌شه (سازگار با Slack/Discord/n8n و…). خالی بذار تا غیرفعال بمونه.
+        </p>
+        <input
+          dir="ltr"
+          value={form.webhookUrl}
+          onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })}
+          placeholder="https://example.com/webhook"
+          className="w-full rounded-lg border border-border bg-panel2 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+        />
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            onClick={submit}
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
+          >
+            ذخیره
+          </button>
+          <button
+            onClick={testWebhook}
+            disabled={!form.webhookUrl}
+            className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border disabled:opacity-50"
+          >
+            تست
+          </button>
+          {webhookTest && (
+            <span className={`text-xs ${webhookTest.ok ? "text-good" : "text-bad"}`}>
+              {webhookTest.ok ? "ارسال شد ✓" : `خطا: ${webhookTest.error || "ناموفق"}`}
+            </span>
+          )}
+        </div>
+      </div>
 
       <TwoFactorSettings />
       <RemoteActionsToggle />

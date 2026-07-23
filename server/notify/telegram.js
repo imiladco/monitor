@@ -1,8 +1,13 @@
 import { env } from "../config.js";
 import { getSetting, getTelegramTopic, isInMaintenanceWindow } from "../db.js";
+import { sendWebhook } from "./webhook.js";
 import { logger } from "../logger.js";
 
 export async function sendTelegram(text, category = null) {
+  // Fan out to a generic webhook if configured — independent of Telegram, so
+  // it fires even when Telegram isn't set up. Fire-and-forget.
+  sendWebhook({ text, category }).catch(() => {});
+
   const botToken = getSetting("telegram_bot_token", env.telegramBotToken);
   const groupId = getSetting("telegram_group_id", "");
   const fallbackChatId = getSetting("telegram_chat_id", env.telegramChatId);

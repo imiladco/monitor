@@ -55,6 +55,7 @@ export const api = {
   settings: () => request("/settings"),
   updateSettings: (data) => request("/settings", { method: "PUT", body: JSON.stringify(data) }),
   testTelegram: () => request("/settings/test-telegram", { method: "POST" }),
+  testWebhook: () => request("/settings/test-webhook", { method: "POST" }),
   discoverTelegramGroup: () => request("/settings/telegram-discover-group", { method: "POST" }),
   telegramTopics: () => request("/settings/telegram-topics"),
   setupTelegramTopics: () => request("/settings/telegram-topics/setup", { method: "POST" }),

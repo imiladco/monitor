@@ -52,6 +52,7 @@ import {
   getIncident,
 } from "../db.js";
 import { hashMcpKey } from "../mcpAuth.js";
+import { sendWebhook } from "../notify/webhook.js";
 import { fleetVulnerabilities, runVulnerabilityScan } from "../vuln/index.js";
 import { systemStatus } from "../systemHealth.js";
 
@@ -175,6 +176,7 @@ apiRouter.get("/settings", (req, res) => {
     telegramChatId: getSetting("telegram_chat_id", ""),
     telegramGroupId: getSetting("telegram_group_id", ""),
     hasTelegramBotToken: Boolean(getSetting("telegram_bot_token", "")),
+    webhookUrl: getSetting("webhook_url", ""),
   });
 });
 
@@ -189,7 +191,16 @@ apiRouter.put("/settings", (req, res) => {
   if (typeof telegramGroupId === "string") {
     setSetting("telegram_group_id", telegramGroupId);
   }
+  if (typeof req.body?.webhookUrl === "string") {
+    setSetting("webhook_url", req.body.webhookUrl.trim());
+  }
   res.json({ ok: true });
+});
+
+apiRouter.post("/settings/test-webhook", async (req, res) => {
+  if (!getSetting("webhook_url", "")) return res.status(400).json({ error: "آدرس webhook تنظیم نشده" });
+  const result = await sendWebhook({ text: "🔔 تست وبهوک از Site Monitor", category: "status", severity: "info" });
+  res.json(result);
 });
 
 apiRouter.get("/settings/branding", (req, res) => {
