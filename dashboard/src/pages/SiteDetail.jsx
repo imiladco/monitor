@@ -9,6 +9,7 @@ import PortChecks from "../components/PortChecks.jsx";
 import SiteActions from "../components/SiteActions.jsx";
 import SiteVulnerabilities from "../components/SiteVulnerabilities.jsx";
 import SiteHolds from "../components/SiteHolds.jsx";
+import HttpMonitorFields from "../components/HttpMonitorFields.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { useToast } from "../components/Toast.jsx";
 
@@ -124,6 +125,7 @@ export default function SiteDetail() {
                 keyword: site.keyword || "",
                 keywordMode: site.keywordMode || "present",
                 client: site.client || "",
+                httpConfig: site.httpConfig || null,
               });
               setEditing(true);
             }}
@@ -183,6 +185,10 @@ export default function SiteDetail() {
               <option value="absent">نباید توی صفحه باشه</option>
             </select>
           </div>
+          <HttpMonitorFields
+            value={editForm.httpConfig}
+            onChange={(hc) => setEditForm({ ...editForm, httpConfig: hc })}
+          />
           {saveError && <p className="mt-2 text-sm text-bad">{saveError}</p>}
           <div className="mt-3 flex gap-2">
             <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white">

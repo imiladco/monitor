@@ -89,7 +89,7 @@ apiRouter.post("/sites", (req, res) => {
     return res.status(400).json({ error: "invalid url" });
   }
   const apiKey = crypto.randomBytes(24).toString("hex");
-  const site = createSite({ name, url, checkoutUrl, keyword, keywordMode, client, apiKey });
+  const site = createSite({ name, url, checkoutUrl, keyword, keywordMode, client, httpConfig: req.body?.httpConfig, apiKey });
   // Returned exactly once — only the hash is stored, so it can't be shown again.
   res.status(201).json({ id: site.id, apiKey });
 });
@@ -104,7 +104,7 @@ apiRouter.put("/sites/:id", (req, res) => {
   } catch {
     return res.status(400).json({ error: "invalid url" });
   }
-  updateSite(site.id, { name, url, checkoutUrl, keyword, keywordMode, client });
+  updateSite(site.id, { name, url, checkoutUrl, keyword, keywordMode, client, httpConfig: req.body?.httpConfig });
   res.json({ ok: true });
 });
 
@@ -369,6 +369,7 @@ apiRouter.get("/sites/:id", (req, res) => {
     paused: Boolean(site.paused),
     public: Boolean(site.public),
     client: site.client,
+    httpConfig: site.http_config ? JSON.parse(site.http_config) : null,
     hasAgentKey: Boolean(site.api_key),
     agent: snapshot?.data ?? null,
     agentLastSeen: snapshot?.captured_at ?? null,

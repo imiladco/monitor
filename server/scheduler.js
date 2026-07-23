@@ -33,9 +33,22 @@ function hostnameOf(url) {
   return new URL(url).hostname;
 }
 
+function parseHttpConfig(site) {
+  if (!site.http_config) return {};
+  try {
+    return JSON.parse(site.http_config);
+  } catch {
+    return {};
+  }
+}
+
 async function checkSiteUptime(site) {
   const prev = latestCheck(site.id, "uptime");
-  const result = await checkUptime(site.url, { keyword: site.keyword, keywordMode: site.keyword_mode });
+  const result = await checkUptime(site.url, {
+    keyword: site.keyword,
+    keywordMode: site.keyword_mode,
+    ...parseHttpConfig(site),
+  });
   recordCheck(site.id, {
     type: "uptime",
     ok: result.up,

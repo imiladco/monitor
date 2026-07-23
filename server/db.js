@@ -271,6 +271,7 @@ const siteColumnsToAdd = {
   keyword_mode: "TEXT NOT NULL DEFAULT 'present'",
   public: "INTEGER NOT NULL DEFAULT 0",
   client: "TEXT",
+  http_config: "TEXT", // JSON: advanced HTTP monitor options (method, headers, assertions…)
 };
 for (const [column, definition] of Object.entries(siteColumnsToAdd)) {
   if (!existingSiteColumns.has(column)) {
@@ -323,12 +324,26 @@ export function listSites() {
   return db.prepare("SELECT * FROM sites ORDER BY name").all();
 }
 
-export function createSite({ name, url, checkoutUrl, apiKey, keyword, keywordMode, client }) {
+function serializeHttpConfig(httpConfig) {
+  if (httpConfig == null || httpConfig === "") return null;
+  return typeof httpConfig === "string" ? httpConfig : JSON.stringify(httpConfig);
+}
+
+export function createSite({ name, url, checkoutUrl, apiKey, keyword, keywordMode, client, httpConfig }) {
   const info = db
     .prepare(
-      "INSERT INTO sites (name, url, checkout_url, api_key, keyword, keyword_mode, client) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO sites (name, url, checkout_url, api_key, keyword, keyword_mode, client, http_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .run(name, url, checkoutUrl || null, hashApiKey(apiKey), keyword || null, keywordMode || "present", client || null);
+    .run(
+      name,
+      url,
+      checkoutUrl || null,
+      hashApiKey(apiKey),
+      keyword || null,
+      keywordMode || "present",
+      client || null,
+      serializeHttpConfig(httpConfig)
+    );
   return db.prepare("SELECT * FROM sites WHERE id = ?").get(info.lastInsertRowid);
 }
 
@@ -340,10 +355,19 @@ export function regenerateSiteApiKey(id) {
   return info.changes === 1 ? raw : null;
 }
 
-export function updateSite(id, { name, url, checkoutUrl, keyword, keywordMode, client }) {
+export function updateSite(id, { name, url, checkoutUrl, keyword, keywordMode, client, httpConfig }) {
   db.prepare(
-    "UPDATE sites SET name = ?, url = ?, checkout_url = ?, keyword = ?, keyword_mode = ?, client = ? WHERE id = ?"
-  ).run(name, url, checkoutUrl || null, keyword || null, keywordMode || "present", client || null, id);
+    "UPDATE sites SET name = ?, url = ?, checkout_url = ?, keyword = ?, keyword_mode = ?, client = ?, http_config = ? WHERE id = ?"
+  ).run(
+    name,
+    url,
+    checkoutUrl || null,
+    keyword || null,
+    keywordMode || "present",
+    client || null,
+    serializeHttpConfig(httpConfig),
+    id
+  );
   return db.prepare("SELECT * FROM sites WHERE id = ?").get(id);
 }
 
