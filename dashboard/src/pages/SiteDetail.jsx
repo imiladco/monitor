@@ -260,6 +260,31 @@ export default function SiteDetail() {
         </div>
       )}
 
+      {site.dns && (site.dns.a?.length > 0 || site.dns.ns?.length > 0) && (
+        <div className="mt-4 rounded-xl border border-border bg-panel p-4">
+          <h3 className="mb-3 text-sm font-medium text-gray-100">رکوردهای DNS</h3>
+          <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+            {[
+              ["A", site.dns.a],
+              ["AAAA", site.dns.aaaa],
+              ["NS", site.dns.ns],
+              ["MX", site.dns.mx],
+            ]
+              .filter(([, v]) => v && v.length)
+              .map(([label, values]) => (
+                <div key={label} className="rounded-md border border-border bg-panel2 px-3 py-2">
+                  <div className="mb-1 text-[11px] text-muted">{label}</div>
+                  <div className="tnum space-y-0.5 text-gray-300" dir="ltr">
+                    {values.map((v) => (
+                      <div key={v} className="truncate">{v}</div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 flex gap-2">
         <a href={api.slaReportUrl(site.id, 30)} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border">
           دانلود گزارش SLA (۳۰ روز، CSV)

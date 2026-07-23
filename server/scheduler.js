@@ -3,6 +3,7 @@ import { env } from "./config.js";
 import { checkUptime } from "./checks/uptime.js";
 import { checkSsl } from "./checks/ssl.js";
 import { checkPort } from "./checks/port.js";
+import { resolveDns } from "./checks/dns.js";
 import { sendTelegram, notifySite } from "./notify/telegram.js";
 import {
   listSites,
@@ -170,6 +171,46 @@ async function checkSiteSsl(site) {
   }
 }
 
+function arraysEqual(a = [], b = []) {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+async function checkSiteDns(site) {
+  const prev = latestCheckMeta(site.id, "dns");
+  let records;
+  try {
+    records = await resolveDns(hostnameOf(site.url));
+  } catch (err) {
+    recordCheck(site.id, { type: "dns", ok: false, error: err.message });
+    return;
+  }
+  const resolved = records.a.length > 0 || records.aaaa.length > 0;
+  recordCheck(site.id, { type: "dns", ok: resolved, error: resolved ? null : "no A/AAAA records", meta: records });
+
+  if (!prev) return; // first observation — nothing to compare
+
+  // IP change (A/AAAA) and nameserver change are worth alerting; MX change is
+  // informational.
+  if (!arraysEqual(prev.a, records.a) || !arraysEqual(prev.aaaa, records.aaaa)) {
+    const title = `🌐 رکورد IP دامنه تغییر کرد — ${(prev.a[0] || "?")} → ${(records.a[0] || "?")}`;
+    recordEvent(site.id, { type: "dns_change", title, severity: "warning", detail: { before: prev.a, after: records.a } });
+    await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "status");
+  }
+  if (!arraysEqual(prev.ns, records.ns)) {
+    const title = "🌐 Nameserverهای دامنه تغییر کردن";
+    recordEvent(site.id, { type: "ns_change", title, severity: "warning", detail: { before: prev.ns, after: records.ns } });
+    await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "status");
+  }
+  if (!arraysEqual(prev.mx, records.mx)) {
+    recordEvent(site.id, {
+      type: "mx_change",
+      title: "✉️ رکوردهای MX (ایمیل) دامنه تغییر کردن",
+      severity: "info",
+      detail: { before: prev.mx, after: records.mx },
+    });
+  }
+}
+
 async function checkPortMonitor(portCheck) {
   const type = `port:${portCheck.id}`;
   const prev = latestCheck(portCheck.site_id, type);
@@ -252,9 +293,14 @@ export function startScheduler() {
   cron.schedule(`*/${env.checkIntervalMinutes} * * * *`, runChecks);
   cron.schedule(`0 ${env.dailySummaryHour} * * *`, sendDailySummary);
   cron.schedule(`0 ${env.deepCheckHour} * * *`, () => {
-    for (const site of listSites().filter((s) => !s.paused)) {
+    const active = listSites().filter((s) => !s.paused);
+    for (const site of active) {
       enqueueJob({ type: "deep_check", payload: { siteId: site.id }, maxAttempts: 2 });
     }
+    // DNS is cheap and stable — resolve daily, off the browser queue.
+    runPool(active, env.uptimeConcurrency, checkSiteDns).catch((err) =>
+      logger.error("dns: sweep failed", { error: err.message })
+    );
   });
   cron.schedule(`0 ${env.backupHour} * * *`, async () => {
     await backupDatabase();
