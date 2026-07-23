@@ -249,6 +249,26 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_claim ON jobs(status, run_after, priority);
 
+-- Visual monitoring v2: multiple screenshot targets per site (URL × viewport),
+-- each diffed against an approved baseline rather than the previous shot, so
+-- normal drift doesn't keep re-alerting.
+CREATE TABLE IF NOT EXISTS visual_targets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  url TEXT NOT NULL,
+  viewport TEXT NOT NULL DEFAULT 'desktop',
+  threshold REAL NOT NULL DEFAULT 15,
+  baseline_path TEXT,
+  baseline_at TEXT,
+  last_path TEXT,
+  diff_path TEXT,
+  last_diff REAL,
+  last_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_visual_targets_site ON visual_targets(site_id);
+
 -- Daily uptime rollups. Kept indefinitely so long-term history survives the
 -- raw-check retention window (raw checks are pruned after DATA_RETENTION_DAYS).
 CREATE TABLE IF NOT EXISTS uptime_daily (
@@ -719,6 +739,41 @@ export function siteIncidents(siteId, limit = 50) {
 
 export function getIncident(id) {
   return db.prepare("SELECT * FROM incidents WHERE id = ?").get(id);
+}
+
+// --- Visual monitoring targets ----------------------------------------------
+
+export function createVisualTarget({ siteId, label, url, viewport = "desktop", threshold = 15 }) {
+  const info = db
+    .prepare("INSERT INTO visual_targets (site_id, label, url, viewport, threshold) VALUES (?, ?, ?, ?, ?)")
+    .run(siteId, label, url, viewport, threshold);
+  return db.prepare("SELECT * FROM visual_targets WHERE id = ?").get(info.lastInsertRowid);
+}
+
+export function listVisualTargets(siteId) {
+  return db.prepare("SELECT * FROM visual_targets WHERE site_id = ? ORDER BY id").all(siteId);
+}
+
+export function listAllVisualTargets() {
+  return db.prepare("SELECT * FROM visual_targets ORDER BY site_id, id").all();
+}
+
+export function getVisualTarget(id) {
+  return db.prepare("SELECT * FROM visual_targets WHERE id = ?").get(id);
+}
+
+export function deleteVisualTarget(id) {
+  db.prepare("DELETE FROM visual_targets WHERE id = ?").run(id);
+}
+
+export function setVisualBaseline(id, path) {
+  db.prepare("UPDATE visual_targets SET baseline_path = ?, baseline_at = datetime('now') WHERE id = ?").run(path, id);
+}
+
+export function recordVisualShot(id, { lastPath, diffPath, lastDiff }) {
+  db.prepare(
+    "UPDATE visual_targets SET last_path = ?, diff_path = ?, last_diff = ?, last_at = datetime('now') WHERE id = ?"
+  ).run(lastPath, diffPath ?? null, lastDiff ?? null, id);
 }
 
 // --- Data aggregation & DB health -------------------------------------------

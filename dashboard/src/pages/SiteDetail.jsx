@@ -10,6 +10,7 @@ import SiteActions from "../components/SiteActions.jsx";
 import SiteVulnerabilities from "../components/SiteVulnerabilities.jsx";
 import SiteHolds from "../components/SiteHolds.jsx";
 import HttpMonitorFields from "../components/HttpMonitorFields.jsx";
+import VisualTargets from "../components/VisualTargets.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { useToast } from "../components/Toast.jsx";
 
@@ -308,6 +309,7 @@ export default function SiteDetail() {
       <SiteHolds siteId={site.id} />
       <SiteVulnerabilities siteId={site.id} />
       <SiteActions site={site} remoteActionsEnabled={remoteActionsEnabled} />
+      <VisualTargets siteId={site.id} />
       <MaintenanceWindows siteId={site.id} />
       <PortChecks siteId={site.id} />
 

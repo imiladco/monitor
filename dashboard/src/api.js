@@ -104,6 +104,13 @@ export const api = {
   system: () => request("/system"),
   incidents: (status = "open") => request(`/incidents?status=${status}`),
   siteIncidents: (siteId) => request(`/sites/${siteId}/incidents`),
+  visualTargets: (siteId) => request(`/sites/${siteId}/visual-targets`),
+  createVisualTarget: (siteId, data) =>
+    request(`/sites/${siteId}/visual-targets`, { method: "POST", body: JSON.stringify(data) }),
+  deleteVisualTarget: (id) => request(`/visual-targets/${id}`, { method: "DELETE" }),
+  approveVisualTarget: (id) => request(`/visual-targets/${id}/approve`, { method: "POST" }),
+  captureVisualTarget: (id) => request(`/visual-targets/${id}/capture`, { method: "POST" }),
+  visualImageUrl: (id, kind) => `/api/visual-targets/${id}/image?kind=${kind}`,
   acknowledgeIncident: (id) => request(`/incidents/${id}/acknowledge`, { method: "POST" }),
   siteHolds: (siteId) => request(`/sites/${siteId}/holds`),
   releaseHold: (id) => request(`/holds/${id}/release`, { method: "POST" }),

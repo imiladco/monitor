@@ -50,7 +50,12 @@ import {
   siteIncidents,
   acknowledgeIncident,
   getIncident,
+  createVisualTarget,
+  listVisualTargets,
+  getVisualTarget,
+  deleteVisualTarget,
 } from "../db.js";
+import { approveBaseline, captureVisualTarget } from "../visual.js";
 import { hashMcpKey } from "../mcpAuth.js";
 import { sendWebhook } from "../notify/webhook.js";
 import { fleetVulnerabilities, runVulnerabilityScan } from "../vuln/index.js";
@@ -363,6 +368,63 @@ apiRouter.get("/sites/:id/incidents", (req, res) => {
   const site = getSiteById(req.params.id);
   if (!site) return res.status(404).json({ error: "not found" });
   res.json(siteIncidents(site.id, Number(req.query.limit) || 50));
+});
+
+// --- Visual monitoring targets ---
+apiRouter.get("/sites/:id/visual-targets", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  res.json(listVisualTargets(site.id));
+});
+
+apiRouter.post("/sites/:id/visual-targets", (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "not found" });
+  const { label, url, viewport, threshold } = req.body || {};
+  if (!label || !url) return res.status(400).json({ error: "label and url are required" });
+  try {
+    new URL(url);
+  } catch {
+    return res.status(400).json({ error: "invalid url" });
+  }
+  const target = createVisualTarget({
+    siteId: site.id,
+    label,
+    url,
+    viewport: ["desktop", "tablet", "mobile"].includes(viewport) ? viewport : "desktop",
+    threshold: Number(threshold) > 0 ? Number(threshold) : 15,
+  });
+  res.status(201).json(target);
+});
+
+apiRouter.delete("/visual-targets/:id", (req, res) => {
+  deleteVisualTarget(Number(req.params.id));
+  res.status(204).end();
+});
+
+apiRouter.post("/visual-targets/:id/approve", (req, res) => {
+  if (!approveBaseline(Number(req.params.id))) {
+    return res.status(400).json({ error: "no capture to approve yet" });
+  }
+  res.json({ ok: true });
+});
+
+// Capture now (e.g. to seed the baseline right after creating a target).
+apiRouter.post("/visual-targets/:id/capture", async (req, res) => {
+  const target = getVisualTarget(Number(req.params.id));
+  if (!target) return res.status(404).json({ error: "not found" });
+  const site = getSiteById(target.site_id);
+  await captureVisualTarget(target, site);
+  res.json(getVisualTarget(target.id));
+});
+
+apiRouter.get("/visual-targets/:id/image", (req, res) => {
+  const target = getVisualTarget(Number(req.params.id));
+  if (!target) return res.status(404).end();
+  const kind = req.query.kind || "last";
+  const p = kind === "baseline" ? target.baseline_path : kind === "diff" ? target.diff_path : target.last_path;
+  if (!p || !fs.existsSync(p)) return res.status(404).end();
+  res.type("png").sendFile(p);
 });
 
 apiRouter.get("/sites/:id", (req, res) => {

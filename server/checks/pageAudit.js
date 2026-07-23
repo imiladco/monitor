@@ -22,6 +22,35 @@ async function getBrowser() {
   });
 }
 
+export const VIEWPORTS = {
+  desktop: { width: 1280, height: 800 },
+  tablet: { width: 768, height: 1024 },
+  mobile: { width: 390, height: 844 },
+};
+
+// Captures a full-page screenshot of an arbitrary URL at a named viewport,
+// with the same SSRF egress guard as auditPage. Returns a PNG buffer or
+// { error }.
+export async function captureUrl(url, viewport = "desktop", { delayMs = 1500 } = {}) {
+  const size = VIEWPORTS[viewport] || VIEWPORTS.desktop;
+  const browser = await getBrowser();
+  try {
+    const page = await browser.newPage({ viewport: size, isMobile: viewport === "mobile" });
+    await page.route("**/*", async (route) => {
+      if (await isBlockedUrl(route.request().url())) return route.abort("blockedbyclient");
+      return route.continue();
+    });
+    await page.goto(url, { waitUntil: "load", timeout: 30000 });
+    await page.waitForTimeout(delayMs);
+    const buffer = await page.screenshot({ type: "png", fullPage: true });
+    return { ok: true, buffer };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    await browser.close();
+  }
+}
+
 /**
  * Loads a page once and collects both a screenshot (for visual-regression
  * diffing) and Core Web Vitals-ish metrics (LCP/CLS/TTFB), avoiding the
