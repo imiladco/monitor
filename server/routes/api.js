@@ -16,6 +16,7 @@ import {
   setSitePublic,
   uptimePercent,
   latestCheck,
+  latestCheckMeta,
   checkHistory,
   eventTimeline,
   latestSnapshot,
@@ -359,6 +360,8 @@ apiRouter.get("/sites/:id", (req, res) => {
   const snapshot = latestSnapshot(site.id);
   const domain = latestCheck(site.id, "domain");
   const screenshot = latestScreenshot(site.id);
+  const sslCheck = latestCheck(site.id, "ssl");
+  const sslMeta = latestCheckMeta(site.id, "ssl");
   res.json({
     id: site.id,
     name: site.name,
@@ -374,6 +377,18 @@ apiRouter.get("/sites/:id", (req, res) => {
     agent: snapshot?.data ?? null,
     agentLastSeen: snapshot?.captured_at ?? null,
     domainDaysLeft: domain?.ssl_days_left ?? null,
+    ssl: sslCheck
+      ? {
+          ok: Boolean(sslCheck.ok),
+          daysLeft: sslCheck.ssl_days_left ?? null,
+          error: sslCheck.error ?? null,
+          issuer: sslMeta?.issuer ?? null,
+          subject: sslMeta?.subject ?? null,
+          tlsVersion: sslMeta?.tlsVersion ?? null,
+          authorized: sslMeta?.authorized ?? null,
+          hostnameMismatch: sslMeta?.hostnameMismatch ?? null,
+        }
+      : null,
     uptime7d: uptimePercent(site.id, 7),
     uptime30d: uptimePercent(site.id, 30),
     uptime90d: uptimePercent(site.id, 90),

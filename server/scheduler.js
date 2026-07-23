@@ -8,6 +8,7 @@ import {
   listSites,
   recordCheck,
   latestCheck,
+  latestCheckMeta,
   recordEvent,
   listAllPortChecks,
   recoverStuckCommands,
@@ -106,6 +107,7 @@ async function checkSiteUptime(site) {
 
 async function checkSiteSsl(site) {
   const prev = latestCheck(site.id, "ssl");
+  const prevMeta = latestCheckMeta(site.id, "ssl");
   let result;
   try {
     result = await checkSsl(hostnameOf(site.url));
@@ -118,15 +120,52 @@ async function checkSiteSsl(site) {
     ok: result.ok,
     sslDaysLeft: result.daysLeft ?? null,
     error: result.error ?? null,
+    meta: result.ok
+      ? {
+          issuer: result.issuer,
+          subject: result.subject,
+          tlsVersion: result.tlsVersion,
+          fingerprint: result.fingerprint,
+          altNames: result.altNames,
+          authorized: result.authorized,
+          authorizationError: result.authorizationError,
+          hostnameMismatch: result.hostnameMismatch,
+        }
+      : null,
   });
 
   if (!result.ok) return;
 
+  // Chain/hostname validity — a real security signal, not just expiry.
+  const wasAuthorized = prevMeta ? prevMeta.authorized !== false : true;
+  if (!result.authorized && wasAuthorized) {
+    const reason = result.hostnameMismatch ? "عدم تطابق نام دامنه (hostname mismatch)" : "زنجیره‌ی گواهی نامعتبره";
+    const title = `🔴 گواهی SSL نامعتبر — ${reason}`;
+    recordEvent(site.id, { type: "ssl_invalid", title, severity: "critical", detail: { error: result.authorizationError } });
+    await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "ssl");
+  }
+
+  // Certificate rotation / issuer change — informational, but a surprise
+  // issuer change is worth surfacing.
+  if (prevMeta?.fingerprint && result.fingerprint && prevMeta.fingerprint !== result.fingerprint) {
+    const issuerChanged = prevMeta.issuer && result.issuer && prevMeta.issuer !== result.issuer;
+    const title = issuerChanged
+      ? `🔁 گواهی SSL عوض شد — صادرکننده از «${prevMeta.issuer}» به «${result.issuer}»`
+      : `🔁 گواهی SSL نو شد (${result.issuer || "صادرکننده نامشخص"})`;
+    recordEvent(site.id, { type: "ssl_cert_change", title, severity: issuerChanged ? "warning" : "info" });
+    if (issuerChanged) await notifySite(site.id, `<b>${site.name}</b> ${title}`, "ssl");
+  }
+
   const shouldWarn = result.daysLeft <= env.sslWarnDays;
   const alreadyWarned = prev && prev.ssl_days_left != null && prev.ssl_days_left <= env.sslWarnDays;
   if (shouldWarn && !alreadyWarned) {
-    const title = `⚠️ گواهی SSL تا ${result.daysLeft} روز دیگه منقضی می‌شه`;
-    recordEvent(site.id, { type: "ssl_warning", title, severity: "warning" });
+    // Escalate severity as expiry nears (spec: <30 warning, <7 high, expired critical).
+    const severity = result.daysLeft <= 0 ? "critical" : result.daysLeft <= 7 ? "critical" : "warning";
+    const title =
+      result.daysLeft <= 0
+        ? "🔴 گواهی SSL منقضی شده"
+        : `⚠️ گواهی SSL تا ${result.daysLeft} روز دیگه منقضی می‌شه`;
+    recordEvent(site.id, { type: "ssl_warning", title, severity });
     await notifySite(site.id, `<b>${site.name}</b> ${title}`, "ssl");
   }
 }

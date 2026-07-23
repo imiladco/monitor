@@ -284,6 +284,12 @@ if (!existingCommandColumns.has("claimed_at")) {
   db.exec("ALTER TABLE commands ADD COLUMN claimed_at TEXT");
 }
 
+// Structured extras for a check (SSL cert metadata, DNS records, …) as JSON.
+const existingCheckColumns = new Set(db.prepare("PRAGMA table_info(checks)").all().map((c) => c.name));
+if (!existingCheckColumns.has("meta")) {
+  db.exec("ALTER TABLE checks ADD COLUMN meta TEXT");
+}
+
 // Agent API keys are stored only as a SHA-256 hash, never in plaintext — the
 // raw key is shown once at create/regenerate time. The api_key column is
 // repurposed to hold the hash (it's already NOT NULL UNIQUE, and SQLite can't
@@ -445,8 +451,8 @@ export function getSiteById(id) {
 
 export function recordCheck(siteId, check) {
   db.prepare(
-    `INSERT INTO checks (site_id, type, ok, response_ms, status_code, ssl_days_left, error)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO checks (site_id, type, ok, response_ms, status_code, ssl_days_left, error, meta)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     siteId,
     check.type,
@@ -454,8 +460,20 @@ export function recordCheck(siteId, check) {
     check.responseMs ?? null,
     check.statusCode ?? null,
     check.sslDaysLeft ?? null,
-    check.error ?? null
+    check.error ?? null,
+    check.meta ? JSON.stringify(check.meta) : null
   );
+}
+
+// Parsed meta of the latest check of a type, or null.
+export function latestCheckMeta(siteId, type) {
+  const row = db.prepare("SELECT meta FROM checks WHERE site_id = ? AND type = ? ORDER BY checked_at DESC LIMIT 1").get(siteId, type);
+  if (!row?.meta) return null;
+  try {
+    return JSON.parse(row.meta);
+  } catch {
+    return null;
+  }
 }
 
 export function latestCheck(siteId, type) {
