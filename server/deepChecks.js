@@ -6,6 +6,7 @@ import { diffPercent } from "./checks/visualDiff.js";
 import { checkDomainExpiry } from "./checks/domain.js";
 import { listSites, latestScreenshot, recordScreenshot, recordCheck, latestCheck, recordEvent } from "./db.js";
 import { notifySite } from "./notify/telegram.js";
+import { captureSiteVisualTargets } from "./visual.js";
 import { logger } from "./logger.js";
 
 const SCREENSHOT_DIR = path.resolve("data/screenshots");
@@ -102,11 +103,13 @@ async function runDomainCheck(site) {
   }
 }
 
-// Deep check for a single site: visual/vitals audit + domain expiry. Used both
-// by the job worker (one job per site) and the direct runDeepChecks() path.
+// Deep check for a single site: visual/vitals audit + domain expiry + visual
+// regression targets. Used both by the job worker (one job per site) and the
+// direct runDeepChecks() path.
 export async function runDeepCheckForSite(site) {
   await runVisualAndVitals(site);
   await runDomainCheck(site);
+  await captureSiteVisualTargets(site);
 }
 
 export async function runDeepChecks() {
