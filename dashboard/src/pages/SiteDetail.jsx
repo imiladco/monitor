@@ -234,6 +234,32 @@ export default function SiteDetail() {
         />
       </div>
 
+      {site.ssl && (
+        <div className="mt-4 rounded-xl border border-border bg-panel p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-100">گواهی SSL</h3>
+            {site.ssl.authorized === false ? (
+              <span className="rounded bg-bad/20 px-2 py-0.5 text-xs text-bad">
+                {site.ssl.hostnameMismatch ? "عدم تطابق دامنه" : "نامعتبر"}
+              </span>
+            ) : site.ssl.ok ? (
+              <span className="rounded bg-good/20 px-2 py-0.5 text-xs text-good">معتبر</span>
+            ) : (
+              <span className="rounded bg-bad/20 px-2 py-0.5 text-xs text-bad">خطا</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat
+              label="انقضا"
+              value={site.ssl.daysLeft != null ? `${site.ssl.daysLeft} روز` : "-"}
+            />
+            <Stat label="صادرکننده" value={site.ssl.issuer || "-"} />
+            <Stat label="نسخه TLS" value={site.ssl.tlsVersion || "-"} />
+            <Stat label="دامنه گواهی" value={site.ssl.subject || "-"} />
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 flex gap-2">
         <a href={api.slaReportUrl(site.id, 30)} className="rounded-lg bg-panel2 px-3 py-1.5 text-sm text-gray-300 hover:bg-border">
           دانلود گزارش SLA (۳۰ روز، CSV)
