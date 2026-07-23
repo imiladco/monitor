@@ -362,6 +362,7 @@ apiRouter.get("/sites/:id", (req, res) => {
   const screenshot = latestScreenshot(site.id);
   const sslCheck = latestCheck(site.id, "ssl");
   const sslMeta = latestCheckMeta(site.id, "ssl");
+  const dnsMeta = latestCheckMeta(site.id, "dns");
   res.json({
     id: site.id,
     name: site.name,
@@ -389,6 +390,7 @@ apiRouter.get("/sites/:id", (req, res) => {
           hostnameMismatch: sslMeta?.hostnameMismatch ?? null,
         }
       : null,
+    dns: dnsMeta ?? null,
     uptime7d: uptimePercent(site.id, 7),
     uptime30d: uptimePercent(site.id, 30),
     uptime90d: uptimePercent(site.id, 90),
