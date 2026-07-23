@@ -290,6 +290,12 @@ if (!existingCheckColumns.has("meta")) {
   db.exec("ALTER TABLE checks ADD COLUMN meta TEXT");
 }
 
+// Extended Core Web Vitals (v2) on screenshots.
+const existingShotColumns = new Set(db.prepare("PRAGMA table_info(screenshots)").all().map((c) => c.name));
+for (const [col, def] of Object.entries({ fcp_ms: "INTEGER", tbt_ms: "INTEGER", resources: "TEXT" })) {
+  if (!existingShotColumns.has(col)) db.exec(`ALTER TABLE screenshots ADD COLUMN ${col} ${def}`);
+}
+
 // Agent API keys are stored only as a SHA-256 hash, never in plaintext — the
 // raw key is shown once at create/regenerate time. The api_key column is
 // repurposed to hold the hash (it's already NOT NULL UNIQUE, and SQLite can't
@@ -505,10 +511,21 @@ export function eventTimeline(siteId, limit = 200) {
     .map((e) => ({ ...e, detail: e.detail ? JSON.parse(e.detail) : null }));
 }
 
-export function recordScreenshot(siteId, { path, diffPercent, lcpMs, cls, ttfbMs }) {
+export function recordScreenshot(siteId, { path, diffPercent, lcpMs, cls, ttfbMs, fcpMs, tbtMs, resources }) {
   db.prepare(
-    `INSERT INTO screenshots (site_id, path, diff_percent, lcp_ms, cls, ttfb_ms) VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(siteId, path, diffPercent ?? null, lcpMs ?? null, cls ?? null, ttfbMs ?? null);
+    `INSERT INTO screenshots (site_id, path, diff_percent, lcp_ms, cls, ttfb_ms, fcp_ms, tbt_ms, resources)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    siteId,
+    path,
+    diffPercent ?? null,
+    lcpMs ?? null,
+    cls ?? null,
+    ttfbMs ?? null,
+    fcpMs ?? null,
+    tbtMs ?? null,
+    resources ? JSON.stringify(resources) : null
+  );
 }
 
 export function latestScreenshot(siteId) {
@@ -520,7 +537,7 @@ export function latestScreenshot(siteId) {
 export function vitalsHistory(siteId, limit = 60) {
   return db
     .prepare(
-      "SELECT lcp_ms, cls, ttfb_ms, captured_at FROM screenshots WHERE site_id = ? ORDER BY captured_at DESC LIMIT ?"
+      "SELECT lcp_ms, cls, ttfb_ms, fcp_ms, tbt_ms, captured_at FROM screenshots WHERE site_id = ? ORDER BY captured_at DESC LIMIT ?"
     )
     .all(siteId, limit)
     .reverse();

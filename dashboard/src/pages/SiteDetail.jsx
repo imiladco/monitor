@@ -227,6 +227,17 @@ export default function SiteDetail() {
         <Stat label="پوسته" value={agent?.theme?.name || "-"} />
         <Stat label="LCP" value={site.screenshot?.lcpMs != null ? `${site.screenshot.lcpMs}ms` : "-"} />
         <Stat label="CLS" value={site.screenshot?.cls != null ? site.screenshot.cls : "-"} />
+        <Stat label="FCP" value={site.screenshot?.fcpMs != null ? `${site.screenshot.fcpMs}ms` : "-"} />
+        <Stat label="TBT" value={site.screenshot?.tbtMs != null ? `${site.screenshot.tbtMs}ms` : "-"} />
+        {site.screenshot?.resources && (
+          <>
+            <Stat label="تعداد درخواست" value={site.screenshot.resources.count} />
+            <Stat
+              label="حجم منابع"
+              value={`${(site.screenshot.resources.bytes / 1024).toFixed(0)} KB`}
+            />
+          </>
+        )}
         <Stat label="انقضای دامنه" value={site.domainDaysLeft != null ? `${site.domainDaysLeft} روز` : "-"} />
         <Stat
           label="تغییر ظاهری اخیر"

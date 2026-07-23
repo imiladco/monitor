@@ -402,6 +402,9 @@ apiRouter.get("/sites/:id", (req, res) => {
           lcpMs: screenshot.lcp_ms,
           cls: screenshot.cls,
           ttfbMs: screenshot.ttfb_ms,
+          fcpMs: screenshot.fcp_ms,
+          tbtMs: screenshot.tbt_ms,
+          resources: screenshot.resources ? JSON.parse(screenshot.resources) : null,
         }
       : null,
   });

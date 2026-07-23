@@ -42,6 +42,9 @@ async function runVisualAndVitals(site) {
     lcpMs: audit.lcpMs,
     cls: audit.cls,
     ttfbMs: audit.ttfbMs,
+    fcpMs: audit.fcpMs,
+    tbtMs: audit.tbtMs,
+    resources: audit.resources,
   });
 
   // keep only the last 20 screenshots per site on disk
