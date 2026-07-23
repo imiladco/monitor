@@ -42,7 +42,7 @@ export async function auditPage(url) {
     });
 
     await page.addInitScript(() => {
-      window.__vitals = { lcp: 0, cls: 0 };
+      window.__vitals = { lcp: 0, cls: 0, fcp: 0, tbt: 0 };
       try {
         new PerformanceObserver((list) => {
           const entries = list.getEntries();
@@ -54,6 +54,16 @@ export async function auditPage(url) {
             if (!entry.hadRecentInput) window.__vitals.cls += entry.value;
           }
         }).observe({ type: "layout-shift", buffered: true });
+        new PerformanceObserver((list) => {
+          const fcp = list.getEntries().find((e) => e.name === "first-contentful-paint");
+          if (fcp) window.__vitals.fcp = fcp.startTime;
+        }).observe({ type: "paint", buffered: true });
+        // Total Blocking Time (lab): sum of long-task time over 50ms.
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            window.__vitals.tbt += Math.max(0, entry.duration - 50);
+          }
+        }).observe({ type: "longtask", buffered: true });
       } catch {
         // PerformanceObserver entry types not supported; metrics stay at 0
       }
@@ -69,6 +79,24 @@ export async function auditPage(url) {
       const [entry] = performance.getEntriesByType("navigation");
       return entry ? { ttfb: Math.round(entry.responseStart) } : null;
     });
+    // Resource waterfall summary: request count and transferred bytes by kind.
+    const resources = await page.evaluate(() => {
+      const entries = performance.getEntriesByType("resource");
+      const kindOf = (e) => {
+        const t = e.initiatorType;
+        if (t === "script") return "js";
+        if (t === "link" || t === "css") return "css";
+        if (t === "img" || t === "image") return "img";
+        return "other";
+      };
+      const sum = { count: entries.length, bytes: 0, js: 0, css: 0, img: 0, other: 0 };
+      for (const e of entries) {
+        const size = e.transferSize || e.encodedBodySize || 0;
+        sum.bytes += size;
+        sum[kindOf(e)] += size;
+      }
+      return sum;
+    });
 
     const screenshot = await page.screenshot({ type: "png" });
 
@@ -77,7 +105,10 @@ export async function auditPage(url) {
       loadMs,
       lcpMs: Math.round(vitals.lcp) || null,
       cls: Number(vitals.cls?.toFixed(3)) || 0,
+      fcpMs: Math.round(vitals.fcp) || null,
+      tbtMs: Math.round(vitals.tbt) || null,
       ttfbMs: nav?.ttfb ?? null,
+      resources,
       screenshot,
     };
   } catch (err) {
