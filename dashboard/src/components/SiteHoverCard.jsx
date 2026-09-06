@@ -83,6 +83,18 @@ export default function SiteHoverCard({ site, children, className = "" }) {
               />
               <Metric label="آپدیت" value={site.updatesCount ?? 0} tone={site.updatesCount ? "text-info" : "text-content"} />
             </div>
+            {detail?.pageSpeed?.score != null && (
+              <div className="mb-2 flex items-center justify-between rounded border border-border bg-surface px-2 py-1">
+                <span className="text-[10px] text-muted">PageSpeed</span>
+                <span
+                  className={`tnum ${
+                    detail.pageSpeed.score >= 90 ? "text-good" : detail.pageSpeed.score >= 50 ? "text-warn" : "text-bad"
+                  }`}
+                >
+                  {detail.pageSpeed.score}
+                </span>
+              </div>
+            )}
             {site.recentChecks?.length > 1 ? (
               <Sparkline checks={site.recentChecks} width={232} height={36} />
             ) : (
