@@ -50,6 +50,18 @@ function Overview({ site, checks, events }) {
             <span className="tnum text-content">{v != null ? `${v}%` : "—"}</span>
           </div>
         ))}
+        {site.pageSpeed?.score != null && (
+          <div className="mr-auto">
+            <span className="text-muted">PageSpeed: </span>
+            <span
+              className={`tnum ${
+                site.pageSpeed.score >= 90 ? "text-good" : site.pageSpeed.score >= 50 ? "text-warn" : "text-bad"
+              }`}
+            >
+              {site.pageSpeed.score}
+            </span>
+          </div>
+        )}
       </div>
 
       <div>
