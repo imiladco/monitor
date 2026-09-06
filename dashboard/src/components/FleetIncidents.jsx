@@ -23,7 +23,11 @@ export default function FleetIncidents({ incidents, onAcknowledge }) {
       <div>
         {incidents.map((i) => (
           <div key={i.id} className="flex items-center gap-3 border-b border-bad/10 px-4 py-2 text-xs last:border-0">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${i.flapping ? "bg-warn" : "bg-bad"}`} />
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${
+                i.severity === "warning" ? "bg-warn" : i.flapping ? "bg-warn" : "bg-bad"
+              }`}
+            />
             <Link to={`/?site=${i.site_id}`} className="font-medium text-content hover:text-accent">
               {i.site_name}
             </Link>

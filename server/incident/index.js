@@ -56,6 +56,8 @@ export async function processCheckResult(site, opts) {
     subject = site.name,
     downTitle,
     recoveryTitle,
+    severity = "critical",
+    confirmChecks = env.incidentConfirmChecks,
     // Keep SLA/timeline event types per-check-type so a checkout/port outage
     // isn't counted as uptime downtime.
     eventType = `${type}_change`,
@@ -68,8 +70,8 @@ export async function processCheckResult(site, opts) {
       incrementIncidentFailure(open.id);
       return "escalated";
     }
-    const runLength = trailingFailures(site.id, type, env.incidentConfirmChecks);
-    if (runLength < env.incidentConfirmChecks) {
+    const runLength = trailingFailures(site.id, type, confirmChecks);
+    if (runLength < confirmChecks) {
       return "confirming"; // not enough consecutive failures yet — no alert
     }
 
@@ -78,12 +80,13 @@ export async function processCheckResult(site, opts) {
     const incident = openIncident({
       siteId: site.id,
       type,
+      severity,
       title,
       cause: downCause ?? null,
       startedAt: firstFailureAt(site.id, type, runLength),
       flapping,
     });
-    recordEvent(site.id, { type: eventType, title, severity: "critical", detail: { incidentId: incident.id } });
+    recordEvent(site.id, { type: eventType, title, severity, detail: { incidentId: incident.id } });
     logger.info("incident: opened", { site: site.name, type, incidentId: incident.id, flapping });
 
     // Flapping sites get a single consolidated notice instead of an alert per

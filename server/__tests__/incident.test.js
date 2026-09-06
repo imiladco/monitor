@@ -19,6 +19,25 @@ async function check(site, up) {
   return processCheckResult(site, { type: "uptime", up, downCause: "HTTP 500", recoveryDetail: "100ms" });
 }
 
+// Slow-response path: its own check type, warning severity, and a higher
+// consecutive-confirm count so a single slow blip doesn't alert.
+async function slow(site, isSlow) {
+  recordCheck(site.id, { type: "slow", ok: !isSlow });
+  return processCheckResult(site, { type: "slow", up: !isSlow, severity: "warning", confirmChecks: 3 });
+}
+
+test("slow incidents respect confirmChecks and open with warning severity", async () => {
+  const site = createSite({ name: "sluggish", url: "https://slug.example.com", apiKey: "inc-slow" });
+  assert.equal(await slow(site, true), "confirming"); // 1 slow
+  assert.equal(await slow(site, true), "confirming"); // 2 slow — still under 3
+  assert.equal(getOpenIncident(site.id, "slow"), undefined);
+  assert.equal(await slow(site, true), "opened"); // 3rd consecutive slow confirms
+  const open = getOpenIncident(site.id, "slow");
+  assert.ok(open);
+  assert.equal(open.severity, "warning");
+  assert.equal(await slow(site, false), "resolved"); // one fast check clears it
+});
+
 test("a single failure does not open an incident (confirmation guard)", async () => {
   const site = createSite({ name: "one-blip", url: "https://blip.example.com", apiKey: "inc-1" });
   const action = await check(site, false);

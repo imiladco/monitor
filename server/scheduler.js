@@ -45,7 +45,6 @@ function parseHttpConfig(site) {
 }
 
 async function checkSiteUptime(site) {
-  const prev = latestCheck(site.id, "uptime");
   const result = await checkUptime(site.url, {
     keyword: site.keyword,
     keywordMode: site.keyword_mode,
@@ -70,19 +69,22 @@ async function checkSiteUptime(site) {
     notifyCategory: "status",
   });
 
-  if (result.up && prev) {
-    const wasSlow = prev.response_ms > env.slowResponseMs;
-    if (result.slow && !wasSlow) {
-      const title = `🐢 کند شد: ${result.responseMs}ms`;
-      recordEvent(site.id, { type: "slow_response", title, severity: "warning" });
-      await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "performance");
-    } else if (!result.slow && wasSlow) {
-      recordEvent(site.id, {
-        type: "slow_response_recovered",
-        title: `⚡️ سرعت پاسخ عادی شد (${result.responseMs}ms)`,
-        severity: "info",
-      });
-    }
+  if (result.up) {
+    // Slow-response is debounced through the incident engine: it only alerts
+    // after several consecutive slow checks (no more flapping spam at the
+    // threshold), dedupes while it stays slow, resolves once on recovery, and
+    // consolidates a genuinely-flapping site. Recorded as its own check type
+    // so the confirmation window is independent of uptime.
+    recordCheck(site.id, { type: "slow", ok: !result.slow, responseMs: result.responseMs });
+    await processCheckResult(site, {
+      type: "slow",
+      up: !result.slow,
+      severity: "warning",
+      confirmChecks: env.slowConfirmChecks,
+      downTitle: `🐢 پاسخ‌دهی کند شده — ${result.responseMs}ms (بالاتر از ${env.slowResponseMs}ms)`,
+      recoveryTitle: `⚡️ سرعت پاسخ عادی شد (${result.responseMs}ms)`,
+      notifyCategory: "performance",
+    });
   }
 
   if (site.checkout_url) {
