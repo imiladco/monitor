@@ -6,11 +6,18 @@ import { useToast } from "./Toast.jsx";
 const typeLabel = { plugin: "افزونه", theme: "پوسته", core: "هسته‌ی وردپرس" };
 
 function statusLabel(status) {
-  return { pending: "در صف", running: "در حال اجرا", done: "انجام شد", failed: "ناموفق" }[status] || status;
+  return { pending: "در صف", running: "در حال اجرا", done: "انجام شد", failed: "ناموفق", cancelled: "لغو شده" }[status] || status;
 }
 
 function formatTime(iso) {
   return new Date(iso.replace(" ", "T") + "Z").toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" });
+}
+
+// The agent must be polling for a queued command to ever run. Consider it
+// "online" if we've heard from it in the last 20 minutes.
+function agentOnline(iso) {
+  if (!iso) return false;
+  return Date.now() - new Date(iso.replace(" ", "T") + "Z").getTime() < 20 * 60 * 1000;
 }
 
 export default function SiteActions({ site, remoteActionsEnabled }) {
@@ -32,6 +39,7 @@ export default function SiteActions({ site, remoteActionsEnabled }) {
   if (!remoteActionsEnabled) return null;
 
   const updates = site.agent?.updatesAvailable || [];
+  const online = agentOnline(site.agentLastSeen);
 
   async function runUpdate(update) {
     if (update.type === "core") {
@@ -50,10 +58,20 @@ export default function SiteActions({ site, remoteActionsEnabled }) {
         update.type === "core" ? {} : { slug: update.slug }
       );
       await loadCommands();
-      toast.success(`دستور آپدیت ${update.name} ارسال شد`);
+      toast.success(
+        online
+          ? `دستور آپدیت ${update.name} در صف قرار گرفت — با poll بعدی agent اجرا می‌شه`
+          : `دستور در صف قرار گرفت، ولی agent این سایت آنلاین نیست و تا وصل نشه اجرا نمی‌شه`
+      );
     } finally {
       setQueuing(null);
     }
+  }
+
+  async function cancel(id) {
+    await api.cancelCommand(id);
+    await loadCommands();
+    toast.info("دستور از صف لغو شد");
   }
 
   async function clearCache() {
@@ -74,6 +92,16 @@ export default function SiteActions({ site, remoteActionsEnabled }) {
 
       {site.agent && (
         <>
+          <div className={`mb-3 flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs ${online ? "bg-good/10 text-good" : "bg-warn/10 text-warn"}`}>
+            <span className={`h-2 w-2 rounded-full ${online ? "bg-good" : "bg-warn"}`} />
+            {online ? (
+              <span>agent آنلاینه — دستورها با poll بعدی اجرا می‌شن.</span>
+            ) : (
+              <span>
+                agent اخیراً دیده نشده{site.agentLastSeen ? ` (${formatTime(site.agentLastSeen)})` : ""} — دستورها تا وصل‌شدن دوباره در صف می‌مونن و اجرا نمی‌شن.
+              </span>
+            )}
+          </div>
           <div className="mb-3 flex items-center justify-between">
             <p className="text-xs text-gray-500">
               {updates.length > 0 ? `${updates.length} آپدیت موجوده` : "همه‌چیز آپدیته"}
@@ -116,7 +144,14 @@ export default function SiteActions({ site, remoteActionsEnabled }) {
                       {c.type} {c.params?.slug ? `(${c.params.slug})` : ""} — {statusLabel(c.status)}
                       {c.result ? ` — ${c.result}` : ""}
                     </span>
-                    <span>{formatTime(c.created_at)}</span>
+                    <span className="flex items-center gap-2">
+                      {c.status === "pending" && (
+                        <button onClick={() => cancel(c.id)} className="text-bad hover:underline">
+                          لغو
+                        </button>
+                      )}
+                      {formatTime(c.created_at)}
+                    </span>
                   </div>
                 ))}
               </div>

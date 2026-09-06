@@ -85,6 +85,7 @@ export const api = {
   setRemoteActionsEnabled: (enabled) =>
     request("/settings/remote-actions", { method: "PUT", body: JSON.stringify({ enabled }) }),
   commands: (siteId) => request(`/sites/${siteId}/commands`),
+  cancelCommand: (id) => request(`/commands/${id}`, { method: "DELETE" }),
   createCommand: (siteId, type, params) =>
     request(`/sites/${siteId}/commands`, { method: "POST", body: JSON.stringify({ type, params }) }),
   branding: async () => {

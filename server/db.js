@@ -611,6 +611,14 @@ export function listCommands(siteId, limit = 50) {
     .map((c) => ({ ...c, params: c.params ? JSON.parse(c.params) : null }));
 }
 
+// Cancel a still-queued command (not yet claimed by the agent). Returns the
+// number of rows changed (0 = already running/done, or not found).
+export function cancelCommand(id) {
+  return db
+    .prepare("UPDATE commands SET status = 'cancelled', completed_at = datetime('now') WHERE id = ? AND status = 'pending'")
+    .run(id).changes;
+}
+
 // Fetches this site's pending commands and atomically marks them "running"
 // so a slow/duplicate agent poll doesn't pick the same command up twice.
 export function claimPendingCommands(siteId) {
