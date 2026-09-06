@@ -190,9 +190,10 @@ apiRouter.get("/settings", (req, res) => {
     hasTelegramBotToken: Boolean(getSetting("telegram_bot_token", "")),
     webhookUrl: getSetting("webhook_url", ""),
     hasPageSpeedKey: Boolean(getSetting("pagespeed_api_key", "")),
-    pageSpeedStrategy: getSetting("pagespeed_strategy", "mobile"),
+    pageSpeedStrategy: getSetting("pagespeed_strategy", "both"),
     pageSpeedMinScore: Number(getSetting("pagespeed_min_score", "50")),
     pageSpeedEnabled: getSetting("pagespeed_enabled", "1") === "1",
+    pageSpeedIntervalHours: Number(getSetting("pagespeed_interval_hours", "24")),
   });
 });
 
@@ -214,7 +215,7 @@ apiRouter.put("/settings", (req, res) => {
   if (typeof pk === "string" && pk && pk !== "••••••••") {
     setSetting("pagespeed_api_key", pk.trim());
   }
-  if (["mobile", "desktop"].includes(req.body?.pageSpeedStrategy)) {
+  if (["mobile", "desktop", "both"].includes(req.body?.pageSpeedStrategy)) {
     setSetting("pagespeed_strategy", req.body.pageSpeedStrategy);
   }
   if (req.body?.pageSpeedMinScore != null && Number.isFinite(Number(req.body.pageSpeedMinScore))) {
@@ -222,6 +223,10 @@ apiRouter.put("/settings", (req, res) => {
   }
   if (typeof req.body?.pageSpeedEnabled === "boolean") {
     setSetting("pagespeed_enabled", req.body.pageSpeedEnabled ? "1" : "0");
+  }
+  const psHours = Number(req.body?.pageSpeedIntervalHours);
+  if (Number.isFinite(psHours) && psHours >= 1 && psHours <= 168) {
+    setSetting("pagespeed_interval_hours", String(Math.round(psHours)));
   }
   res.json({ ok: true });
 });
@@ -460,7 +465,26 @@ apiRouter.get("/sites/:id", (req, res) => {
   const sslCheck = latestCheck(site.id, "ssl");
   const sslMeta = latestCheckMeta(site.id, "ssl");
   const dnsMeta = latestCheckMeta(site.id, "dns");
-  const pageSpeed = latestCheckMeta(site.id, "pagespeed");
+  const psMeta = latestCheckMeta(site.id, "pagespeed");
+  // New shape is { at, mobile, desktop }; tolerate the old flat single-strategy
+  // shape too. Headline score prefers mobile.
+  const psMobile = psMeta ? psMeta.mobile || (psMeta.strategy === "mobile" ? psMeta : null) : null;
+  const psDesktop = psMeta ? psMeta.desktop || (psMeta.strategy === "desktop" ? psMeta : null) : null;
+  const psPrimary = psMobile || psDesktop;
+  const pageSpeed = psPrimary
+    ? {
+        score: psPrimary.score,
+        strategy: psMobile ? "mobile" : "desktop",
+        fcpMs: psPrimary.fcpMs,
+        lcpMs: psPrimary.lcpMs,
+        tbtMs: psPrimary.tbtMs,
+        cls: psPrimary.cls,
+        siMs: psPrimary.siMs,
+        mobile: psMobile,
+        desktop: psDesktop,
+        at: psMeta.at ?? null,
+      }
+    : null;
   res.json({
     id: site.id,
     name: site.name,
@@ -489,7 +513,7 @@ apiRouter.get("/sites/:id", (req, res) => {
         }
       : null,
     dns: dnsMeta ?? null,
-    pageSpeed: pageSpeed && pageSpeed.ok ? pageSpeed : null,
+    pageSpeed,
     uptime7d: uptimePercent(site.id, 7),
     uptime30d: uptimePercent(site.id, 30),
     uptime90d: uptimePercent(site.id, 90),

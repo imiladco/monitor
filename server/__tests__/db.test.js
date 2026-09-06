@@ -37,6 +37,7 @@ const {
   recoverStuckCommands,
   getSiteByApiKey,
   regenerateSiteApiKey,
+  lastCheckTimestampOfType,
   listClients,
 } = await import("../db.js");
 
@@ -174,6 +175,15 @@ test("commands: queue, claim (moves pending->running, idempotent), and complete"
   assert.equal(history[0].status, "done");
   assert.equal(history[0].result, "updated to 9.0");
   assert.ok(history[0].completed_at);
+});
+
+test("lastCheckTimestampOfType returns epoch ms for the newest check of a type, else null", () => {
+  const site = createSite({ name: "TS", url: "https://ts.example.com", apiKey: "key-ts" });
+  assert.equal(lastCheckTimestampOfType("pagespeed"), null);
+  recordCheck(site.id, { type: "pagespeed", ok: true });
+  const ms = lastCheckTimestampOfType("pagespeed");
+  assert.equal(typeof ms, "number");
+  assert.ok(Math.abs(Date.now() - ms) < 60000); // recorded just now
 });
 
 test("cancelCommand cancels a pending command but not a claimed one", () => {

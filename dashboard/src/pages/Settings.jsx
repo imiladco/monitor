@@ -19,9 +19,10 @@ export default function SettingsPage() {
     telegramGroupId: "",
     webhookUrl: "",
     pageSpeedApiKey: "",
-    pageSpeedStrategy: "mobile",
+    pageSpeedStrategy: "both",
     pageSpeedMinScore: 50,
     pageSpeedEnabled: true,
+    pageSpeedIntervalHours: 24,
   });
   const [hasPageSpeedKey, setHasPageSpeedKey] = useState(false);
   const [webhookTest, setWebhookTest] = useState(null);
@@ -40,9 +41,10 @@ export default function SettingsPage() {
         telegramGroupId: s.telegramGroupId,
         webhookUrl: s.webhookUrl || "",
         pageSpeedApiKey: s.hasPageSpeedKey ? "••••••••" : "",
-        pageSpeedStrategy: s.pageSpeedStrategy || "mobile",
+        pageSpeedStrategy: s.pageSpeedStrategy || "both",
         pageSpeedMinScore: s.pageSpeedMinScore ?? 50,
         pageSpeedEnabled: s.pageSpeedEnabled !== false,
+        pageSpeedIntervalHours: s.pageSpeedIntervalHours ?? 24,
       });
       setHasPageSpeedKey(Boolean(s.hasPageSpeedKey));
       setLoading(false);
@@ -141,7 +143,7 @@ export default function SettingsPage() {
       <div className="mb-4 max-w-md rounded-2xl border border-border bg-panel p-6">
         <h3 className="mb-1 font-medium text-gray-100">سرعت — Google PageSpeed</h3>
         <p className="mb-3 text-xs text-gray-500">
-          امتیاز واقعی سرعت (Lighthouse) هر ساعت. کلید رایگان از{" "}
+          امتیاز واقعی سرعت (Lighthouse) — موبایل و دسکتاپ، با بازه‌ی قابل تنظیم. کلید رایگان از{" "}
           <a
             href="https://developers.google.com/speed/docs/insights/v5/get-started"
             target="_blank"
@@ -159,17 +161,30 @@ export default function SettingsPage() {
           placeholder="API key"
           className="w-full rounded-lg border border-border bg-panel2 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
         />
-        <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-gray-400">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-400 sm:grid-cols-4">
           <label>
-            استراتژی
+            نسخه
             <select
               value={form.pageSpeedStrategy}
               onChange={(e) => setForm({ ...form, pageSpeedStrategy: e.target.value })}
               className="mt-1 w-full rounded-lg border border-border bg-panel2 px-2 py-2 text-gray-100 outline-none focus:border-accent"
             >
-              <option value="mobile">موبایل</option>
-              <option value="desktop">دسکتاپ</option>
+              <option value="both">موبایل + دسکتاپ</option>
+              <option value="mobile">فقط موبایل</option>
+              <option value="desktop">فقط دسکتاپ</option>
             </select>
+          </label>
+          <label>
+            هر چند ساعت
+            <input
+              type="number"
+              min="1"
+              max="168"
+              dir="ltr"
+              value={form.pageSpeedIntervalHours}
+              onChange={(e) => setForm({ ...form, pageSpeedIntervalHours: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-border bg-panel2 px-2 py-2 text-gray-100 outline-none focus:border-accent"
+            />
           </label>
           <label>
             حداقل امتیاز
