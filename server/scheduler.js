@@ -19,6 +19,7 @@ import {
   enqueueJob,
   recoverStuckJobs,
   pruneFinishedJobs,
+  getSetting,
 } from "./db.js";
 import { processCheckResult } from "./incident/index.js";
 import { runPool } from "./pool.js";
@@ -214,12 +215,21 @@ async function checkSiteDns(site) {
   }
 }
 
+// Config comes from the panel (settings table) first, falling back to env, so
+// the API key and options can be set from the dashboard without a restart.
+function pageSpeedConfig() {
+  return {
+    apiKey: getSetting("pagespeed_api_key", env.pageSpeedApiKey),
+    strategy: getSetting("pagespeed_strategy", env.pageSpeedStrategy),
+    minScore: Number(getSetting("pagespeed_min_score", String(env.pageSpeedMinScore))),
+    enabled: getSetting("pagespeed_enabled", env.pageSpeedEnabled ? "1" : "0") === "1",
+  };
+}
+
 async function checkSitePageSpeed(site) {
+  const cfg = pageSpeedConfig();
   const prevMeta = latestCheckMeta(site.id, "pagespeed");
-  const result = await runPageSpeed(site.url, {
-    strategy: env.pageSpeedStrategy,
-    apiKey: env.pageSpeedApiKey,
-  });
+  const result = await runPageSpeed(site.url, { strategy: cfg.strategy, apiKey: cfg.apiKey });
   if (!result.ok) {
     // API errors (rate limits, timeouts) shouldn't alert — just record.
     recordCheck(site.id, { type: "pagespeed", ok: false, error: result.error });
@@ -230,8 +240,8 @@ async function checkSitePageSpeed(site) {
   // Alert only on entering the below-threshold state, so a persistently slow
   // score doesn't re-alert every hour.
   if (result.score != null) {
-    const below = result.score < env.pageSpeedMinScore;
-    const wasBelow = prevMeta?.score != null ? prevMeta.score < env.pageSpeedMinScore : false;
+    const below = result.score < cfg.minScore;
+    const wasBelow = prevMeta?.score != null ? prevMeta.score < cfg.minScore : false;
     if (below && !wasBelow) {
       const title = `📉 امتیاز PageSpeed افت کرد: ${result.score} (کمتر از ${env.pageSpeedMinScore})`;
       recordEvent(site.id, { type: "pagespeed_drop", title, severity: "warning", detail: result });
@@ -340,16 +350,16 @@ export function startScheduler() {
     // fresh backup and retention prune so it reflects the trimmed DB.
     await runSystemMaintenance().catch((err) => logger.error("system: maintenance failed", { error: err.message }));
   });
-  if (env.pageSpeedEnabled) {
-    // Real Lighthouse-based speed, once an hour (PSI calls are slow; low
-    // concurrency). This is the authoritative speed signal.
-    cron.schedule("0 * * * *", () => {
-      const active = listSites().filter((s) => !s.paused);
-      runPool(active, env.pageSpeedConcurrency, checkSitePageSpeed).catch((err) =>
-        logger.error("pagespeed: sweep failed", { error: err.message })
-      );
-    });
-  }
+  // Real Lighthouse-based speed, once an hour (PSI calls are slow; low
+  // concurrency). Registered unconditionally; the panel toggle is read at run
+  // time so it can be enabled/disabled without a restart.
+  cron.schedule("0 * * * *", () => {
+    if (!pageSpeedConfig().enabled) return;
+    const active = listSites().filter((s) => !s.paused);
+    runPool(active, env.pageSpeedConcurrency, checkSitePageSpeed).catch((err) =>
+      logger.error("pagespeed: sweep failed", { error: err.message })
+    );
+  });
   cron.schedule(`0 ${env.vulnSyncHour} * * *`, () =>
     runVulnerabilityScan().catch((err) => logger.error("vuln: scan failed", { error: err.message }))
   );

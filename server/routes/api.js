@@ -189,6 +189,10 @@ apiRouter.get("/settings", (req, res) => {
     telegramGroupId: getSetting("telegram_group_id", ""),
     hasTelegramBotToken: Boolean(getSetting("telegram_bot_token", "")),
     webhookUrl: getSetting("webhook_url", ""),
+    hasPageSpeedKey: Boolean(getSetting("pagespeed_api_key", "")),
+    pageSpeedStrategy: getSetting("pagespeed_strategy", "mobile"),
+    pageSpeedMinScore: Number(getSetting("pagespeed_min_score", "50")),
+    pageSpeedEnabled: getSetting("pagespeed_enabled", "1") === "1",
   });
 });
 
@@ -205,6 +209,19 @@ apiRouter.put("/settings", (req, res) => {
   }
   if (typeof req.body?.webhookUrl === "string") {
     setSetting("webhook_url", req.body.webhookUrl.trim());
+  }
+  const pk = req.body?.pageSpeedApiKey;
+  if (typeof pk === "string" && pk && pk !== "••••••••") {
+    setSetting("pagespeed_api_key", pk.trim());
+  }
+  if (["mobile", "desktop"].includes(req.body?.pageSpeedStrategy)) {
+    setSetting("pagespeed_strategy", req.body.pageSpeedStrategy);
+  }
+  if (req.body?.pageSpeedMinScore != null && Number.isFinite(Number(req.body.pageSpeedMinScore))) {
+    setSetting("pagespeed_min_score", String(Number(req.body.pageSpeedMinScore)));
+  }
+  if (typeof req.body?.pageSpeedEnabled === "boolean") {
+    setSetting("pagespeed_enabled", req.body.pageSpeedEnabled ? "1" : "0");
   }
   res.json({ ok: true });
 });

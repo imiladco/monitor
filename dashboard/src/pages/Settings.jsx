@@ -13,7 +13,17 @@ import { useToast } from "../components/Toast.jsx";
 export default function SettingsPage() {
   const confirm = useConfirm();
   const toast = useToast();
-  const [form, setForm] = useState({ telegramBotToken: "", telegramChatId: "", telegramGroupId: "", webhookUrl: "" });
+  const [form, setForm] = useState({
+    telegramBotToken: "",
+    telegramChatId: "",
+    telegramGroupId: "",
+    webhookUrl: "",
+    pageSpeedApiKey: "",
+    pageSpeedStrategy: "mobile",
+    pageSpeedMinScore: 50,
+    pageSpeedEnabled: true,
+  });
+  const [hasPageSpeedKey, setHasPageSpeedKey] = useState(false);
   const [webhookTest, setWebhookTest] = useState(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -29,7 +39,12 @@ export default function SettingsPage() {
         telegramChatId: s.telegramChatId,
         telegramGroupId: s.telegramGroupId,
         webhookUrl: s.webhookUrl || "",
+        pageSpeedApiKey: s.hasPageSpeedKey ? "••••••••" : "",
+        pageSpeedStrategy: s.pageSpeedStrategy || "mobile",
+        pageSpeedMinScore: s.pageSpeedMinScore ?? 50,
+        pageSpeedEnabled: s.pageSpeedEnabled !== false,
       });
+      setHasPageSpeedKey(Boolean(s.hasPageSpeedKey));
       setLoading(false);
     });
     api.statusPage().then((s) => setStatusToken(s.token));
@@ -121,6 +136,68 @@ export default function SettingsPage() {
             </span>
           )}
         </div>
+      </div>
+
+      <div className="mb-4 max-w-md rounded-2xl border border-border bg-panel p-6">
+        <h3 className="mb-1 font-medium text-gray-100">سرعت — Google PageSpeed</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          امتیاز واقعی سرعت (Lighthouse) هر ساعت. کلید رایگان از{" "}
+          <a
+            href="https://developers.google.com/speed/docs/insights/v5/get-started"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent hover:underline"
+          >
+            اینجا
+          </a>{" "}
+          بگیر. {hasPageSpeedKey && <span className="text-good">کلید تنظیم شده ✓</span>}
+        </p>
+        <input
+          dir="ltr"
+          value={form.pageSpeedApiKey}
+          onChange={(e) => setForm({ ...form, pageSpeedApiKey: e.target.value })}
+          placeholder="API key"
+          className="w-full rounded-lg border border-border bg-panel2 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+        />
+        <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-gray-400">
+          <label>
+            استراتژی
+            <select
+              value={form.pageSpeedStrategy}
+              onChange={(e) => setForm({ ...form, pageSpeedStrategy: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-border bg-panel2 px-2 py-2 text-gray-100 outline-none focus:border-accent"
+            >
+              <option value="mobile">موبایل</option>
+              <option value="desktop">دسکتاپ</option>
+            </select>
+          </label>
+          <label>
+            حداقل امتیاز
+            <input
+              type="number"
+              dir="ltr"
+              value={form.pageSpeedMinScore}
+              onChange={(e) => setForm({ ...form, pageSpeedMinScore: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-border bg-panel2 px-2 py-2 text-gray-100 outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col">
+            فعال
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, pageSpeedEnabled: !form.pageSpeedEnabled })}
+              className={`mt-1 rounded-lg px-2 py-2 ${form.pageSpeedEnabled ? "bg-good/20 text-good" : "bg-panel2 text-gray-400"}`}
+            >
+              {form.pageSpeedEnabled ? "روشن" : "خاموش"}
+            </button>
+          </label>
+        </div>
+        <button
+          onClick={submit}
+          className="mt-3 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
+        >
+          ذخیره
+        </button>
       </div>
 
       <TwoFactorSettings />
