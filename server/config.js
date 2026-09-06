@@ -18,6 +18,9 @@ export const env = {
   dailySummaryHour: Number(process.env.DAILY_SUMMARY_HOUR ?? 9),
   sslWarnDays: Number(process.env.SSL_WARN_DAYS || 14),
   slowResponseMs: Number(process.env.SLOW_RESPONSE_MS || 3000),
+  // Consecutive slow checks before a slow-response alert fires — higher than
+  // the outage threshold so a single slow blip doesn't spam a warning.
+  slowConfirmChecks: Number(process.env.SLOW_CONFIRM_CHECKS || 3),
   // Incident engine: how many consecutive failed checks confirm an outage
   // (blocks single-blip false positives), and the flapping window/threshold.
   // How many site/port checks run concurrently per sweep (was fully
