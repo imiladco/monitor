@@ -4,6 +4,7 @@ import { checkUptime } from "./checks/uptime.js";
 import { checkSsl } from "./checks/ssl.js";
 import { checkPort } from "./checks/port.js";
 import { resolveDns } from "./checks/dns.js";
+import { runPageSpeed } from "./checks/pagespeed.js";
 import { sendTelegram, notifySite } from "./notify/telegram.js";
 import {
   listSites,
@@ -213,6 +214,32 @@ async function checkSiteDns(site) {
   }
 }
 
+async function checkSitePageSpeed(site) {
+  const prevMeta = latestCheckMeta(site.id, "pagespeed");
+  const result = await runPageSpeed(site.url, {
+    strategy: env.pageSpeedStrategy,
+    apiKey: env.pageSpeedApiKey,
+  });
+  if (!result.ok) {
+    // API errors (rate limits, timeouts) shouldn't alert — just record.
+    recordCheck(site.id, { type: "pagespeed", ok: false, error: result.error });
+    return;
+  }
+  recordCheck(site.id, { type: "pagespeed", ok: true, responseMs: result.lcpMs ?? null, meta: result });
+
+  // Alert only on entering the below-threshold state, so a persistently slow
+  // score doesn't re-alert every hour.
+  if (result.score != null) {
+    const below = result.score < env.pageSpeedMinScore;
+    const wasBelow = prevMeta?.score != null ? prevMeta.score < env.pageSpeedMinScore : false;
+    if (below && !wasBelow) {
+      const title = `📉 امتیاز PageSpeed افت کرد: ${result.score} (کمتر از ${env.pageSpeedMinScore})`;
+      recordEvent(site.id, { type: "pagespeed_drop", title, severity: "warning", detail: result });
+      await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "performance");
+    }
+  }
+}
+
 async function checkPortMonitor(portCheck) {
   const type = `port:${portCheck.id}`;
   const prev = latestCheck(portCheck.site_id, type);
@@ -313,6 +340,16 @@ export function startScheduler() {
     // fresh backup and retention prune so it reflects the trimmed DB.
     await runSystemMaintenance().catch((err) => logger.error("system: maintenance failed", { error: err.message }));
   });
+  if (env.pageSpeedEnabled) {
+    // Real Lighthouse-based speed, once an hour (PSI calls are slow; low
+    // concurrency). This is the authoritative speed signal.
+    cron.schedule("0 * * * *", () => {
+      const active = listSites().filter((s) => !s.paused);
+      runPool(active, env.pageSpeedConcurrency, checkSitePageSpeed).catch((err) =>
+        logger.error("pagespeed: sweep failed", { error: err.message })
+      );
+    });
+  }
   cron.schedule(`0 ${env.vulnSyncHour} * * *`, () =>
     runVulnerabilityScan().catch((err) => logger.error("vuln: scan failed", { error: err.message }))
   );

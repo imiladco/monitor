@@ -436,6 +436,7 @@ apiRouter.get("/sites/:id", (req, res) => {
   const sslCheck = latestCheck(site.id, "ssl");
   const sslMeta = latestCheckMeta(site.id, "ssl");
   const dnsMeta = latestCheckMeta(site.id, "dns");
+  const pageSpeed = latestCheckMeta(site.id, "pagespeed");
   res.json({
     id: site.id,
     name: site.name,
@@ -464,6 +465,7 @@ apiRouter.get("/sites/:id", (req, res) => {
         }
       : null,
     dns: dnsMeta ?? null,
+    pageSpeed: pageSpeed && pageSpeed.ok ? pageSpeed : null,
     uptime7d: uptimePercent(site.id, 7),
     uptime30d: uptimePercent(site.id, 30),
     uptime90d: uptimePercent(site.id, 90),

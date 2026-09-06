@@ -246,6 +246,32 @@ export default function SiteDetail() {
         />
       </div>
 
+      {site.pageSpeed && (
+        <div className="mt-4 rounded-xl border border-border bg-panel p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-100">
+              سرعت (Google PageSpeed) <span className="text-[11px] text-muted">· {site.pageSpeed.strategy === "desktop" ? "دسکتاپ" : "موبایل"}</span>
+            </h3>
+            {site.pageSpeed.score != null && (
+              <span
+                className={`tnum rounded px-2 py-0.5 text-xs ${
+                  site.pageSpeed.score >= 90 ? "bg-good/20 text-good" : site.pageSpeed.score >= 50 ? "bg-warn/20 text-warn" : "bg-bad/20 text-bad"
+                }`}
+              >
+                امتیاز {site.pageSpeed.score}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <Stat label="FCP" value={site.pageSpeed.fcpMs != null ? `${site.pageSpeed.fcpMs}ms` : "-"} />
+            <Stat label="LCP" value={site.pageSpeed.lcpMs != null ? `${site.pageSpeed.lcpMs}ms` : "-"} />
+            <Stat label="TBT" value={site.pageSpeed.tbtMs != null ? `${site.pageSpeed.tbtMs}ms` : "-"} />
+            <Stat label="CLS" value={site.pageSpeed.cls != null ? site.pageSpeed.cls : "-"} />
+            <Stat label="Speed Index" value={site.pageSpeed.siMs != null ? `${site.pageSpeed.siMs}ms` : "-"} />
+          </div>
+        </div>
+      )}
+
       {site.ssl && (
         <div className="mt-4 rounded-xl border border-border bg-panel p-4">
           <div className="mb-3 flex items-center justify-between">

@@ -21,6 +21,13 @@ export const env = {
   // Consecutive slow checks before a slow-response alert fires — higher than
   // the outage threshold so a single slow blip doesn't spam a warning.
   slowConfirmChecks: Number(process.env.SLOW_CONFIRM_CHECKS || 3),
+  // Google PageSpeed Insights (real Lighthouse-based speed), run hourly. The
+  // API key is optional but recommended to avoid low anonymous rate limits.
+  pageSpeedEnabled: process.env.PAGESPEED_ENABLED !== "false",
+  pageSpeedApiKey: process.env.PAGESPEED_API_KEY || "",
+  pageSpeedStrategy: process.env.PAGESPEED_STRATEGY || "mobile",
+  pageSpeedMinScore: Number(process.env.PAGESPEED_MIN_SCORE || 50),
+  pageSpeedConcurrency: Number(process.env.PAGESPEED_CONCURRENCY || 2),
   // Incident engine: how many consecutive failed checks confirm an outage
   // (blocks single-blip false positives), and the flapping window/threshold.
   // How many site/port checks run concurrently per sweep (was fully
