@@ -36,6 +36,7 @@ import {
   downtimeIncidents,
   createCommand,
   listCommands,
+  cancelCommand,
   upsertVulnerability,
   deleteVulnerability,
   resolveSiteVulnerability,
@@ -173,6 +174,12 @@ apiRouter.post("/sites/:id/commands", (req, res) => {
 
   const command = createCommand({ siteId: site.id, type, params });
   res.status(201).json(command);
+});
+
+apiRouter.delete("/commands/:id", (req, res) => {
+  const changed = cancelCommand(Number(req.params.id));
+  if (!changed) return res.status(409).json({ error: "دستور دیگه در صف نیست و قابل لغو نیست" });
+  res.json({ ok: true });
 });
 
 apiRouter.get("/settings", (req, res) => {

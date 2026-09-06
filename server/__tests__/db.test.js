@@ -33,6 +33,7 @@ const {
   listCommands,
   claimPendingCommands,
   completeCommand,
+  cancelCommand,
   recoverStuckCommands,
   getSiteByApiKey,
   regenerateSiteApiKey,
@@ -173,6 +174,17 @@ test("commands: queue, claim (moves pending->running, idempotent), and complete"
   assert.equal(history[0].status, "done");
   assert.equal(history[0].result, "updated to 9.0");
   assert.ok(history[0].completed_at);
+});
+
+test("cancelCommand cancels a pending command but not a claimed one", () => {
+  const site = createSite({ name: "Cancelable", url: "https://cancel.example.com", apiKey: "key-cancel" });
+  const cmd = createCommand({ siteId: site.id, type: "clear_cache", params: null });
+  assert.equal(cancelCommand(cmd.id), 1);
+  assert.equal(listCommands(site.id).find((c) => c.id === cmd.id).status, "cancelled");
+
+  const running = createCommand({ siteId: site.id, type: "clear_cache", params: null });
+  claimPendingCommands(site.id); // -> running
+  assert.equal(cancelCommand(running.id), 0); // can't cancel once claimed
 });
 
 test("completeCommand is scoped to the owning site (no cross-site completion)", () => {
