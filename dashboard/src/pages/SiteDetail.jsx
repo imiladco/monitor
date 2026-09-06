@@ -248,26 +248,36 @@ export default function SiteDetail() {
 
       {site.pageSpeed && (
         <div className="mt-4 rounded-xl border border-border bg-panel p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-gray-100">
-              سرعت (Google PageSpeed) <span className="text-[11px] text-muted">· {site.pageSpeed.strategy === "desktop" ? "دسکتاپ" : "موبایل"}</span>
-            </h3>
-            {site.pageSpeed.score != null && (
-              <span
-                className={`tnum rounded px-2 py-0.5 text-xs ${
-                  site.pageSpeed.score >= 90 ? "bg-good/20 text-good" : site.pageSpeed.score >= 50 ? "bg-warn/20 text-warn" : "bg-bad/20 text-bad"
-                }`}
-              >
-                امتیاز {site.pageSpeed.score}
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <Stat label="FCP" value={site.pageSpeed.fcpMs != null ? `${site.pageSpeed.fcpMs}ms` : "-"} />
-            <Stat label="LCP" value={site.pageSpeed.lcpMs != null ? `${site.pageSpeed.lcpMs}ms` : "-"} />
-            <Stat label="TBT" value={site.pageSpeed.tbtMs != null ? `${site.pageSpeed.tbtMs}ms` : "-"} />
-            <Stat label="CLS" value={site.pageSpeed.cls != null ? site.pageSpeed.cls : "-"} />
-            <Stat label="Speed Index" value={site.pageSpeed.siMs != null ? `${site.pageSpeed.siMs}ms` : "-"} />
+          <h3 className="mb-3 text-sm font-medium text-gray-100">سرعت (Google PageSpeed)</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              ["📱 موبایل", site.pageSpeed.mobile],
+              ["🖥 دسکتاپ", site.pageSpeed.desktop],
+            ]
+              .filter(([, d]) => d)
+              .map(([label, d]) => (
+                <div key={label} className="rounded-lg border border-border bg-panel2/40 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs text-gray-300">{label}</span>
+                    {d.score != null && (
+                      <span
+                        className={`tnum rounded px-2 py-0.5 text-xs ${
+                          d.score >= 90 ? "bg-good/20 text-good" : d.score >= 50 ? "bg-warn/20 text-warn" : "bg-bad/20 text-bad"
+                        }`}
+                      >
+                        امتیاز {d.score}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                    <Stat label="FCP" value={d.fcpMs != null ? `${d.fcpMs}ms` : "-"} />
+                    <Stat label="LCP" value={d.lcpMs != null ? `${d.lcpMs}ms` : "-"} />
+                    <Stat label="TBT" value={d.tbtMs != null ? `${d.tbtMs}ms` : "-"} />
+                    <Stat label="CLS" value={d.cls != null ? d.cls : "-"} />
+                    <Stat label="SI" value={d.siMs != null ? `${d.siMs}ms` : "-"} />
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       )}

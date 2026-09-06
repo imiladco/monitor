@@ -25,9 +25,10 @@ export const env = {
   // API key is optional but recommended to avoid low anonymous rate limits.
   pageSpeedEnabled: process.env.PAGESPEED_ENABLED !== "false",
   pageSpeedApiKey: process.env.PAGESPEED_API_KEY || "",
-  pageSpeedStrategy: process.env.PAGESPEED_STRATEGY || "mobile",
+  pageSpeedStrategy: process.env.PAGESPEED_STRATEGY || "both",
   pageSpeedMinScore: Number(process.env.PAGESPEED_MIN_SCORE || 50),
   pageSpeedConcurrency: Number(process.env.PAGESPEED_CONCURRENCY || 2),
+  pageSpeedIntervalHours: Number(process.env.PAGESPEED_INTERVAL_HOURS || 24),
   // Incident engine: how many consecutive failed checks confirm an outage
   // (blocks single-blip false positives), and the flapping window/threshold.
   // How many site/port checks run concurrently per sweep (was fully

@@ -950,6 +950,13 @@ export function lastCheckTimestamp() {
   return row?.t ?? null;
 }
 
+// Most recent check of a given type across all sites, as epoch ms (or null).
+// Used to pace configurable-interval sweeps (e.g. PageSpeed).
+export function lastCheckTimestampOfType(type) {
+  const row = db.prepare("SELECT MAX(checked_at) AS t FROM checks WHERE type = ?").get(type);
+  return row?.t ? new Date(row.t.replace(" ", "T") + "Z").getTime() : null;
+}
+
 export function createMaintenanceWindow({ siteId, note, startsAt, endsAt }) {
   const info = db
     .prepare("INSERT INTO maintenance_windows (site_id, note, starts_at, ends_at) VALUES (?, ?, ?, ?)")

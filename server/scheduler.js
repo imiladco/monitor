@@ -20,6 +20,7 @@ import {
   recoverStuckJobs,
   pruneFinishedJobs,
   getSetting,
+  lastCheckTimestampOfType,
 } from "./db.js";
 import { processCheckResult } from "./incident/index.js";
 import { runPool } from "./pool.js";
@@ -220,31 +221,52 @@ async function checkSiteDns(site) {
 function pageSpeedConfig() {
   return {
     apiKey: getSetting("pagespeed_api_key", env.pageSpeedApiKey),
-    strategy: getSetting("pagespeed_strategy", env.pageSpeedStrategy),
+    strategy: getSetting("pagespeed_strategy", env.pageSpeedStrategy), // mobile | desktop | both
     minScore: Number(getSetting("pagespeed_min_score", String(env.pageSpeedMinScore))),
     enabled: getSetting("pagespeed_enabled", env.pageSpeedEnabled ? "1" : "0") === "1",
+    intervalHours: Math.max(1, Number(getSetting("pagespeed_interval_hours", String(env.pageSpeedIntervalHours)))),
   };
+}
+
+// Prefer the mobile score as the headline (Google's ranking signal), else
+// desktop. Handles both the new {mobile,desktop} meta and the old flat shape.
+function primaryPageSpeed(meta) {
+  if (!meta) return null;
+  if (meta.mobile || meta.desktop) return meta.mobile || meta.desktop;
+  return meta.score != null ? meta : null;
 }
 
 async function checkSitePageSpeed(site) {
   const cfg = pageSpeedConfig();
   const prevMeta = latestCheckMeta(site.id, "pagespeed");
-  const result = await runPageSpeed(site.url, { strategy: cfg.strategy, apiKey: cfg.apiKey });
-  if (!result.ok) {
+  const strategies = cfg.strategy === "both" ? ["mobile", "desktop"] : [cfg.strategy];
+
+  const meta = { at: new Date().toISOString(), mobile: null, desktop: null };
+  let anyOk = false;
+  for (const strat of strategies) {
+    const r = await runPageSpeed(site.url, { strategy: strat, apiKey: cfg.apiKey });
+    if (r.ok) {
+      meta[strat] = r;
+      anyOk = true;
+    }
+  }
+  if (!anyOk) {
     // API errors (rate limits, timeouts) shouldn't alert — just record.
-    recordCheck(site.id, { type: "pagespeed", ok: false, error: result.error });
+    recordCheck(site.id, { type: "pagespeed", ok: false, error: "PageSpeed request failed" });
     return;
   }
-  recordCheck(site.id, { type: "pagespeed", ok: true, responseMs: result.lcpMs ?? null, meta: result });
+  const primary = primaryPageSpeed(meta);
+  recordCheck(site.id, { type: "pagespeed", ok: true, responseMs: primary?.lcpMs ?? null, meta });
 
   // Alert only on entering the below-threshold state, so a persistently slow
-  // score doesn't re-alert every hour.
-  if (result.score != null) {
-    const below = result.score < cfg.minScore;
-    const wasBelow = prevMeta?.score != null ? prevMeta.score < cfg.minScore : false;
-    if (below && !wasBelow) {
-      const title = `📉 امتیاز PageSpeed افت کرد: ${result.score} (کمتر از ${env.pageSpeedMinScore})`;
-      recordEvent(site.id, { type: "pagespeed_drop", title, severity: "warning", detail: result });
+  // score doesn't re-alert every run.
+  const score = primary?.score;
+  if (score != null) {
+    const prevScore = primaryPageSpeed(prevMeta)?.score;
+    const wasBelow = prevScore != null ? prevScore < cfg.minScore : false;
+    if (score < cfg.minScore && !wasBelow) {
+      const title = `📉 امتیاز PageSpeed افت کرد: ${score} (کمتر از ${cfg.minScore})`;
+      recordEvent(site.id, { type: "pagespeed_drop", title, severity: "warning", detail: meta });
       await notifySite(site.id, `<b>${site.name}</b> ${title}\n${site.url}`, "performance");
     }
   }
@@ -350,11 +372,15 @@ export function startScheduler() {
     // fresh backup and retention prune so it reflects the trimmed DB.
     await runSystemMaintenance().catch((err) => logger.error("system: maintenance failed", { error: err.message }));
   });
-  // Real Lighthouse-based speed, once an hour (PSI calls are slow; low
-  // concurrency). Registered unconditionally; the panel toggle is read at run
-  // time so it can be enabled/disabled without a restart.
+  // Real Lighthouse-based speed. The cron ticks hourly, but the actual sweep
+  // runs only once every configured interval (default daily) — both paced and
+  // enabled/disabled from the panel at run time, no restart needed.
   cron.schedule("0 * * * *", () => {
-    if (!pageSpeedConfig().enabled) return;
+    const cfg = pageSpeedConfig();
+    if (!cfg.enabled) return;
+    const last = lastCheckTimestampOfType("pagespeed");
+    // 5-min slack so an interval boundary landing just after the tick isn't skipped.
+    if (last && Date.now() - last < cfg.intervalHours * 3600 * 1000 - 5 * 60 * 1000) return;
     const active = listSites().filter((s) => !s.paused);
     runPool(active, env.pageSpeedConcurrency, checkSitePageSpeed).catch((err) =>
       logger.error("pagespeed: sweep failed", { error: err.message })
